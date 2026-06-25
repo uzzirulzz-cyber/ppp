@@ -1,6 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
-import { connectDB } from '@/lib/db';
 import { verifyToken, extractBearerToken } from '@/lib/auth';
 
 const DEFAULT_RISK_SETTINGS = {
@@ -36,7 +35,6 @@ let riskSettings = { ...DEFAULT_RISK_SETTINGS };
 // GET /api/admin/risk — retrieve risk management settings
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     const token = extractBearerToken(request.headers.get('authorization'));
     if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const payload = verifyToken(token);
@@ -57,7 +55,6 @@ export async function GET(request: NextRequest) {
 // PUT /api/admin/risk — update risk management settings
 export async function PUT(request: NextRequest) {
   try {
-    await connectDB();
     const token = extractBearerToken(request.headers.get('authorization'));
     if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const payload = verifyToken(token);

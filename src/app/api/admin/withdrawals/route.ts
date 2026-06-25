@@ -1,13 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { connectDB } from '@/lib/db';
+import prisma from '@/lib/db';
 import { verifyToken, extractBearerToken } from '@/lib/auth';
-import Transaction from '@/models/Transaction';
-import User from '@/models/User';
 
 // GET /api/admin/withdrawals — list withdrawal requests
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     const token = extractBearerToken(request.headers.get('authorization'));
     if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const payload = verifyToken(token);
@@ -20,27 +17,32 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '20')));
     const status = searchParams.get('status') || '';
 
-    const filter: Record<string, any> = { type: 'WITHDRAW' };
-    if (status) filter.status = status;
+    const where: any = { type: 'WITHDRAW' };
+    if (status) where.status = status;
 
     const [txs, total] = await Promise.all([
-      Transaction.find(filter)
-        .sort({ createdAt: -1 })
-        .skip((page - 1) * limit)
-        .limit(limit)
-        .lean(),
-      Transaction.countDocuments(filter),
+      prisma.transaction.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      prisma.transaction.count({ where }),
     ]);
 
-    // Enrich with user info
-    const userIds = [...new Set(txs.map((t) => t.userId))];
-    const users = await User.find({ _id: { $in: userIds } }).select('name email phone').lean();
-    const userMap = new Map(users.map((u) => [u._id.toString(), u]));
+    const userIds = [...new Set(txs.map(t => t.userId))];
+    const users = userIds.length > 0
+      ? await prisma.user.findMany({
+          where: { id: { in: userIds } },
+          select: { id: true, name: true, email: true, phone: true },
+        })
+      : [];
+    const userMap = new Map(users.map(u => [u.id, u]));
 
-    const enriched = txs.map((tx) => ({
+    const enriched = txs.map(tx => ({
       ...tx,
-      _id: tx._id.toString(),
-      user: userMap.get(tx.userId.toString()) || null,
+      _id: tx.id,
+      user: userMap.get(tx.userId) || null,
     }));
 
     return NextResponse.json({
@@ -56,7 +58,6 @@ export async function GET(request: NextRequest) {
 // PUT /api/admin/withdrawals — approve/reject a withdrawal
 export async function PUT(request: NextRequest) {
   try {
-    await connectDB();
     const token = extractBearerToken(request.headers.get('authorization'));
     if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const payload = verifyToken(token);
@@ -72,12 +73,17 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid status' }, { status: 400 });
     }
 
-    const tx = await Transaction.findByIdAndUpdate(txId, { status }, { new: true }).lean();
-    if (!tx) return NextResponse.json({ error: 'Transaction not found' }, { status: 404 });
+    const tx = await prisma.transaction.update({
+      where: { id: txId },
+      data: { status },
+    });
 
     return NextResponse.json({ message: `Withdrawal ${status.toLowerCase()}`, transaction: tx });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Internal server error';
+    if (message.includes('Record to update not found')) {
+      return NextResponse.json({ error: 'Transaction not found' }, { status: 404 });
+    }
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { connectDB } from '@/lib/db';
-import User from '@/models/User';
+import prisma from '@/lib/db';
 import { verifyToken, extractBearerToken, hashPassword, comparePassword } from '@/lib/auth';
 
 export async function POST(req: NextRequest) {
@@ -11,20 +10,21 @@ export async function POST(req: NextRequest) {
     const payload = verifyToken(token);
     if (!payload) return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
 
-    await connectDB();
     const { currentPassword, newPassword } = await req.json();
     if (!currentPassword || !newPassword) {
       return NextResponse.json({ error: 'Both passwords required' }, { status: 400 });
     }
 
-    const user = await User.findById(payload.userId);
+    const user = await prisma.user.findUnique({ where: { id: payload.userId } });
     if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
 
     const valid = await comparePassword(currentPassword, user.password);
     if (!valid) return NextResponse.json({ error: 'Current password incorrect' }, { status: 400 });
 
-    user.password = await hashPassword(newPassword);
-    await user.save();
+    await prisma.user.update({
+      where: { id: payload.userId },
+      data: { password: await hashPassword(newPassword) },
+    });
 
     return NextResponse.json({ message: 'Password changed successfully' });
   } catch (error) {

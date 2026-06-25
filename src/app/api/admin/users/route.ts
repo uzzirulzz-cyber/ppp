@@ -1,14 +1,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
-import { connectDB } from '@/lib/db';
+import prisma from '@/lib/db';
 import { verifyToken, extractBearerToken } from '@/lib/auth';
-import User from '@/models/User';
-import Wallet from '@/models/Wallet';
 
 // GET /api/admin/users — paginated user list with search & role filter
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     const token = extractBearerToken(request.headers.get('authorization'));
     if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const payload = verifyToken(token);
@@ -23,65 +20,62 @@ export async function GET(request: NextRequest) {
     const role = searchParams.get('role') || '';
     const status = searchParams.get('status') || '';
 
-    const filter: Record<string, any> = {};
-    if (role) filter.role = role;
-    if (status) filter.status = status;
+    const where: any = {};
+    if (role) where.role = role;
+    if (status) where.status = status;
 
     // SUB_AGENT can only see their own referred users + themselves
     if (payload.role === 'SUB_AGENT') {
-      const agentFilter = {
-        $or: [
-          { agentId: payload.userId },
-          { _id: payload.userId },
-        ],
-      };
+      where.OR = [
+        { agentId: payload.userId },
+        { id: payload.userId },
+      ];
       if (search) {
-        const searchRegex = { $regex: search, $options: 'i' };
-        filter.$and = [
-          agentFilter,
-          { $or: [
-            { name: searchRegex },
-            { email: searchRegex },
-            { phone: searchRegex },
-          ]},
+        const searchLower = `%${search}%`;
+        where.OR = [
+          { agentId: payload.userId, name: { contains: search, mode: 'insensitive' } },
+          { agentId: payload.userId, email: { contains: search, mode: 'insensitive' } },
+          { agentId: payload.userId, phone: { contains: search, mode: 'insensitive' } },
+          { id: payload.userId, name: { contains: search, mode: 'insensitive' } },
+          { id: payload.userId, email: { contains: search, mode: 'insensitive' } },
         ];
-      } else {
-        Object.assign(filter, agentFilter);
       }
     } else if (search) {
-      filter.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { email: { $regex: search, $options: 'i' } },
-        { phone: { $regex: search, $options: 'i' } },
+      where.OR = [
+        { name: { contains: search, mode: 'insensitive' } },
+        { email: { contains: search, mode: 'insensitive' } },
+        { phone: { contains: search, mode: 'insensitive' } },
       ];
     }
 
     const [users, total] = await Promise.all([
-      User.find(filter)
-        .select('-password')
-        .sort({ createdAt: -1 })
-        .skip((page - 1) * limit)
-        .limit(limit)
-        .lean(),
-      User.countDocuments(filter),
+      prisma.user.findMany({
+        where,
+        select: { id: true, name: true, firstName: true, lastName: true, email: true, role: true, status: true, avatar: true, phone: true, agentId: true, lastLogin: true, createdAt: true, updatedAt: true },
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      prisma.user.count({ where }),
     ]);
 
-    const userIds = users.map((u) => u._id.toString());
-    const wallets = await Wallet.find({ userId: { $in: userIds } }).lean();
+    const userIds = users.map(u => u.id);
+    const wallets = await prisma.wallet.findMany({
+      where: { userId: { in: userIds } },
+    });
     const walletMap = new Map<string, { totalEquity: number; walletCount: number }>();
     for (const w of wallets) {
-      const uid = w.userId.toString();
-      const existing = walletMap.get(uid) || { totalEquity: 0, walletCount: 0 };
-      walletMap.set(uid, {
+      const existing = walletMap.get(w.userId) || { totalEquity: 0, walletCount: 0 };
+      walletMap.set(w.userId, {
         totalEquity: existing.totalEquity + (w.totalEquity || 0),
         walletCount: existing.walletCount + 1,
       });
     }
 
-    const enriched = users.map((u) => ({
+    const enriched = users.map(u => ({
       ...u,
-      _id: u._id.toString(),
-      walletSummary: walletMap.get(u._id.toString()) || { totalEquity: 0, walletCount: 0 },
+      _id: u.id,
+      walletSummary: walletMap.get(u.id) || { totalEquity: 0, walletCount: 0 },
     }));
 
     return NextResponse.json({
@@ -97,7 +91,6 @@ export async function GET(request: NextRequest) {
 // PUT /api/admin/users — update user status or role
 export async function PUT(request: NextRequest) {
   try {
-    await connectDB();
     const token = extractBearerToken(request.headers.get('authorization'));
     if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const payload = verifyToken(token);
@@ -117,14 +110,18 @@ export async function PUT(request: NextRequest) {
     if (phone !== undefined) updateData.phone = phone;
     if (name) updateData.name = name;
 
-    const user = await User.findByIdAndUpdate(userId, updateData, { new: true }).select('-password').lean();
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
-    }
+    const user = await prisma.user.update({
+      where: { id: userId },
+      data: updateData,
+      select: { id: true, name: true, firstName: true, lastName: true, email: true, role: true, status: true, avatar: true, phone: true, agentId: true, lastLogin: true, createdAt: true, updatedAt: true },
+    });
 
-    return NextResponse.json({ message: 'User updated successfully', user });
+    return NextResponse.json({ message: 'User updated successfully', user: { ...user, _id: user.id } });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Internal server error';
+    if (message.includes('Record to update not found')) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
@@ -132,7 +129,6 @@ export async function PUT(request: NextRequest) {
 // DELETE /api/admin/users — delete a user
 export async function DELETE(request: NextRequest) {
   try {
-    await connectDB();
     const token = extractBearerToken(request.headers.get('authorization'));
     if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const payload = verifyToken(token);
@@ -146,7 +142,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'userId is required' }, { status: 400 });
     }
 
-    const user = await User.findById(userId);
+    const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
@@ -154,12 +150,15 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Cannot delete a SUPER_ADMIN' }, { status: 400 });
     }
 
-    await User.findByIdAndDelete(userId);
-    await Wallet.deleteMany({ userId });
+    // Cascade deletes wallets, transactions, trades, notifications automatically via schema
+    await prisma.user.delete({ where: { id: userId } });
 
-    return NextResponse.json({ message: 'User and associated wallets deleted successfully' });
+    return NextResponse.json({ message: 'User and associated data deleted successfully' });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Internal server error';
+    if (message.includes('Record to delete not found')) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

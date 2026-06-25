@@ -1,15 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { connectDB } from '@/lib/db';
-import User from '@/models/User';
-import InvitationCode from '@/models/InvitationCode';
-import Wallet from '@/models/Wallet';
-import Referral from '@/models/Referral';
+import prisma from '@/lib/db';
 import { hashPassword, signToken } from '@/lib/auth';
 
 export async function POST(req: NextRequest) {
   try {
-    await connectDB();
-
     const body = await req.json();
     const { firstName, lastName, email, phone, password, invitationCode, name } = body;
 
@@ -21,7 +15,6 @@ export async function POST(req: NextRequest) {
     if (finalFirstName && finalLastName) {
       fullName = `${finalFirstName} ${finalLastName}`.trim();
     } else if (name?.trim()) {
-      // Legacy format: split "John Doe" into first/last
       const parts = name.trim().split(/\s+/);
       finalFirstName = parts[0] || '';
       finalLastName = parts.slice(1).join(' ') || '';
@@ -45,24 +38,27 @@ export async function POST(req: NextRequest) {
     let referrerId: string | undefined;
 
     if (invitationCode && invitationCode.trim()) {
-      const code = await InvitationCode.findOne({
-        code: invitationCode.trim().toUpperCase(),
-        status: 'UNUSED',
+      const code = await prisma.invitationCode.findUnique({
+        where: { code: invitationCode.trim().toUpperCase() },
       });
-      if (!code) {
+      if (!code || code.status !== 'UNUSED') {
         return NextResponse.json({ error: 'Invalid or used invitation code' }, { status: 400 });
       }
       role = code.role || 'USER';
       referrerId = code.createdBy;
 
       // Mark code as used
-      code.status = 'USED';
-      code.usedAt = new Date();
-      await code.save();
+      await prisma.invitationCode.update({
+        where: { code: invitationCode.trim().toUpperCase() },
+        data: {
+          status: 'USED',
+          usedAt: new Date(),
+        },
+      });
     }
 
     // Check if email exists
-    const existing = await User.findOne({ email: email.toLowerCase() });
+    const existing = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
     if (existing) {
       return NextResponse.json({ error: 'Email already registered' }, { status: 409 });
     }
@@ -70,50 +66,58 @@ export async function POST(req: NextRequest) {
     const hashedPw = await hashPassword(password);
 
     // Create user
-    const user = await User.create({
-      name: fullName,
-      firstName: finalFirstName,
-      lastName: finalLastName,
-      email: email.toLowerCase(),
-      password: hashedPw,
-      role,
-      status: 'ACTIVE',
-      phone: phone || undefined,
+    const user = await prisma.user.create({
+      data: {
+        name: fullName,
+        firstName: finalFirstName || null,
+        lastName: finalLastName || null,
+        email: email.toLowerCase(),
+        password: hashedPw,
+        role,
+        status: 'ACTIVE',
+        phone: phone || null,
+      },
     });
 
     // Update invitation code with usedBy
     if (invitationCode && invitationCode.trim()) {
-      await InvitationCode.updateOne(
-        { code: invitationCode.trim().toUpperCase() },
-        { usedBy: user._id.toString() }
-      );
+      await prisma.invitationCode.update({
+        where: { code: invitationCode.trim().toUpperCase() },
+        data: { usedBy: user.id },
+      });
     }
 
-    // Create wallet
-    await Wallet.create({
-      userId: user._id.toString(),
-      type: 'SPOT',
-      balances: [
-        { currency: 'USDT', amount: 0, frozen: 0 },
-        { currency: 'BTC', amount: 0, frozen: 0 },
-        { currency: 'ETH', amount: 0, frozen: 0 },
-      ],
-      totalEquity: 0,
+    // Create wallet with default balances
+    await prisma.wallet.create({
+      data: {
+        userId: user.id,
+        type: 'SPOT',
+        totalEquity: 0,
+        balances: {
+          create: [
+            { currency: 'USDT', amount: 0, frozen: 0 },
+            { currency: 'BTC', amount: 0, frozen: 0 },
+            { currency: 'ETH', amount: 0, frozen: 0 },
+          ],
+        },
+      },
     });
 
     // Create referral record if referred
     if (referrerId) {
-      await Referral.create({
-        referrerId,
-        referredId: user._id.toString(),
-        referralCode: invitationCode,
-        level: 1,
-        totalCommission: 0,
+      await prisma.referral.create({
+        data: {
+          referrerId,
+          referredId: user.id,
+          referralCode: invitationCode,
+          level: 1,
+          totalCommission: 0,
+        },
       });
     }
 
     const token = signToken({
-      userId: user._id.toString(),
+      userId: user.id,
       email: user.email,
       role: user.role,
     });
@@ -121,7 +125,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       token,
       user: {
-        id: user._id,
+        id: user.id,
         name: user.name,
         email: user.email,
         role: user.role,

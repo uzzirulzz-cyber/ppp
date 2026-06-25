@@ -1,16 +1,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
-import { connectDB } from '@/lib/db';
+import prisma from '@/lib/db';
 import { verifyToken, extractBearerToken } from '@/lib/auth';
-import User from '@/models/User';
-import AgentConfig from '@/models/AgentConfig';
-import Wallet from '@/models/Wallet';
-import Referral from '@/models/Referral';
 
 // GET /api/admin/agents — list all agents with their configs and stats
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     const token = extractBearerToken(request.headers.get('authorization'));
     if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const payload = verifyToken(token);
@@ -18,45 +13,51 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const agents = await User.find({ role: 'SUB_AGENT' }).select('-password').sort({ createdAt: -1 }).lean();
-    const agentIds = agents.map((a) => a._id.toString());
+    const agents = await prisma.user.findMany({
+      where: { role: 'SUB_AGENT' },
+      select: { id: true, name: true, firstName: true, lastName: true, email: true, role: true, status: true, avatar: true, phone: true, agentId: true, lastLogin: true, createdAt: true, updatedAt: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    const agentIds = agents.map(a => a.id);
 
-    const configs = await AgentConfig.find({ agentId: { $in: agentIds } }).lean();
+    const configs = await prisma.agentConfig.findMany({ where: { agentId: { in: agentIds } } });
     const configMap = new Map<string, any>();
-    for (const c of configs) configMap.set(c.agentId.toString(), c);
+    for (const c of configs) configMap.set(c.agentId, c);
 
-    const userCounts = await User.aggregate([
-      { $match: { agentId: { $in: agentIds }, role: 'USER' } },
-      { $group: { _id: '$agentId', count: { $sum: 1 } } },
-    ]);
+    // User counts per agent
+    const userCounts = await prisma.user.groupBy({
+      by: ['agentId'],
+      where: { agentId: { in: agentIds }, role: 'USER' },
+      _count: { id: true },
+    });
     const userCountMap = new Map<string, number>();
-    for (const uc of userCounts) userCountMap.set(uc._id.toString(), uc.count);
+    for (const uc of userCounts) userCountMap.set(uc.agentId!, uc._count.id);
 
-    const referralStats = await Referral.aggregate([
-      { $match: { referrerId: { $in: agentIds } } },
-      { $group: { _id: '$referrerId', totalCommission: { $sum: '$totalCommission' }, referrals: { $sum: 1 } } },
-    ]);
+    // Referral stats per agent
+    const referralStats = await prisma.referral.groupBy({
+      by: ['referrerId'],
+      where: { referrerId: { in: agentIds } },
+      _count: { id: true },
+      _sum: { totalCommission: true },
+    });
     const referralMap = new Map<string, any>();
-    for (const rs of referralStats) referralMap.set(rs._id.toString(), rs);
+    for (const rs of referralStats) referralMap.set(rs.referrerId, { totalCommission: rs._sum.totalCommission || 0, referrals: rs._count.id });
 
-    const agentUserWallets = await Wallet.find({ userId: { $in: agentIds } }).lean();
+    // Agent wallet equity
+    const agentUserWallets = await prisma.wallet.findMany({ where: { userId: { in: agentIds } } });
     const agentWalletMap = new Map<string, number>();
     for (const w of agentUserWallets) {
-      const uid = w.userId.toString();
-      agentWalletMap.set(uid, (agentWalletMap.get(uid) || 0) + (w.totalEquity || 0));
+      agentWalletMap.set(w.userId, (agentWalletMap.get(w.userId) || 0) + (w.totalEquity || 0));
     }
 
-    const enriched = agents.map((a) => {
-      const id = a._id.toString();
-      return {
-        ...a,
-        _id: id,
-        config: configMap.get(id) || null,
-        userCount: userCountMap.get(id) || 0,
-        referralStats: referralMap.get(id) || { totalCommission: 0, referrals: 0 },
-        totalEquity: agentWalletMap.get(id) || 0,
-      };
-    });
+    const enriched = agents.map(a => ({
+      ...a,
+      _id: a.id,
+      config: configMap.get(a.id) || null,
+      userCount: userCountMap.get(a.id) || 0,
+      referralStats: referralMap.get(a.id) || { totalCommission: 0, referrals: 0 },
+      totalEquity: agentWalletMap.get(a.id) || 0,
+    }));
 
     return NextResponse.json({ agents: enriched });
   } catch (error: unknown) {
@@ -68,7 +69,6 @@ export async function GET(request: NextRequest) {
 // PUT /api/admin/agents — update an agent's config
 export async function PUT(request: NextRequest) {
   try {
-    await connectDB();
     const token = extractBearerToken(request.headers.get('authorization'));
     if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const payload = verifyToken(token);
@@ -83,7 +83,7 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'agentId is required' }, { status: 400 });
     }
 
-    const agent = await User.findById(agentId);
+    const agent = await prisma.user.findUnique({ where: { id: agentId } });
     if (!agent || agent.role !== 'SUB_AGENT') {
       return NextResponse.json({ error: 'Agent not found' }, { status: 404 });
     }
@@ -92,7 +92,7 @@ export async function PUT(request: NextRequest) {
     if (status) userUpdate.status = status;
     if (role) userUpdate.role = role;
     if (Object.keys(userUpdate).length > 0) {
-      await User.findByIdAndUpdate(agentId, userUpdate);
+      await prisma.user.update({ where: { id: agentId }, data: userUpdate });
     }
 
     const configUpdate: Record<string, any> = {};
@@ -105,13 +105,13 @@ export async function PUT(request: NextRequest) {
 
     let config;
     if (Object.keys(configUpdate).length > 0) {
-      config = await AgentConfig.findOneAndUpdate(
-        { agentId },
-        { $set: configUpdate },
-        { new: true, upsert: true }
-      ).lean();
+      config = await prisma.agentConfig.upsert({
+        where: { agentId },
+        update: configUpdate,
+        create: { agentId, ...configUpdate },
+      });
     } else {
-      config = await AgentConfig.findOne({ agentId }).lean();
+      config = await prisma.agentConfig.findUnique({ where: { agentId } });
     }
 
     return NextResponse.json({ message: 'Agent updated successfully', config });

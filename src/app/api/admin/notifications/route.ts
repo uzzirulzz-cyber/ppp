@@ -1,14 +1,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
-import { connectDB } from '@/lib/db';
+import prisma from '@/lib/db';
 import { verifyToken, extractBearerToken } from '@/lib/auth';
-import Notification from '@/models/Notification';
-import User from '@/models/User';
 
 // GET /api/admin/notifications — list all notifications with optional filters
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     const token = extractBearerToken(request.headers.get('authorization'));
     if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const payload = verifyToken(token);
@@ -24,33 +21,38 @@ export async function GET(request: NextRequest) {
     const priority = searchParams.get('priority') || '';
     const read = searchParams.get('read') || '';
 
-    const filter: Record<string, any> = {};
-    if (userId) filter.userId = userId;
-    if (type) filter.type = type;
-    if (priority) filter.priority = priority;
-    if (read !== '') filter.read = read === 'true';
+    const where: any = {};
+    if (userId) where.userId = userId;
+    if (type) where.type = type;
+    if (priority) where.priority = priority;
+    if (read !== '') where.read = read === 'true';
 
     const [notifications, total] = await Promise.all([
-      Notification.find(filter).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit).lean(),
-      Notification.countDocuments(filter),
+      prisma.notification.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      prisma.notification.count({ where }),
     ]);
 
-    const userIds = [...new Set(notifications.map((n) => n.userId.toString()))];
+    const userIds = [...new Set(notifications.map(n => n.userId))];
     const users = userIds.length > 0
-      ? await User.find({ _id: { $in: userIds } }).select('name email').lean()
+      ? await prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, name: true, email: true } })
       : [];
-    const userMap = new Map(users.map((u) => [u._id.toString(), u]));
+    const userMap = new Map(users.map(u => [u.id, u]));
 
-    const enriched = notifications.map((n) => ({
+    const enriched = notifications.map(n => ({
       ...n,
-      _id: n._id.toString(),
-      user: userMap.get(n.userId.toString()) || null,
+      _id: n.id,
+      user: userMap.get(n.userId) || null,
     }));
 
     const [totalNotifs, unreadNotifs, urgentNotifs] = await Promise.all([
-      Notification.countDocuments(),
-      Notification.countDocuments({ read: false }),
-      Notification.countDocuments({ priority: 'URGENT', read: false }),
+      prisma.notification.count(),
+      prisma.notification.count({ where: { read: false } }),
+      prisma.notification.count({ where: { priority: 'URGENT', read: false } }),
     ]);
 
     return NextResponse.json({
@@ -67,7 +69,6 @@ export async function GET(request: NextRequest) {
 // POST /api/admin/notifications — send a broadcast (or targeted) notification
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
     const token = extractBearerToken(request.headers.get('authorization'));
     if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const payload = verifyToken(token);
@@ -89,39 +90,47 @@ export async function POST(request: NextRequest) {
     if (targetUserIds && Array.isArray(targetUserIds) && targetUserIds.length > 0) {
       recipientIds = targetUserIds;
     } else if (targetRole) {
-      const targetUsers = await User.find({ role: targetRole, status: 'ACTIVE' }).select('_id').lean();
-      recipientIds = targetUsers.map((u) => u._id.toString());
+      const targetUsers = await prisma.user.findMany({
+        where: { role: targetRole, status: 'ACTIVE' },
+        select: { id: true },
+      });
+      recipientIds = targetUsers.map(u => u.id);
     } else {
-      const allUsers = await User.find({ status: 'ACTIVE' }).select('_id').lean();
-      recipientIds = allUsers.map((u) => u._id.toString());
+      const allUsers = await prisma.user.findMany({
+        where: { status: 'ACTIVE' },
+        select: { id: true },
+      });
+      recipientIds = allUsers.map(u => u.id);
     }
 
     if (recipientIds.length === 0) {
       return NextResponse.json({ error: 'No recipients found' }, { status: 404 });
     }
 
-    const notifications = recipientIds.map((userId) => ({
-      userId,
-      type: notifType,
-      priority: notifPriority,
-      title,
-      message,
-      read: false,
-      actionUrl: actionUrl || undefined,
-      metadata: {
-        sentBy: payload.userId,
-        sentByRole: payload.role,
-        broadcast: !targetUserIds,
-        targetRole: targetRole || undefined,
-      },
-    }));
+    // Create notifications in batch
+    const metadata = {
+      sentBy: payload.userId,
+      sentByRole: payload.role,
+      broadcast: !targetUserIds,
+      targetRole: targetRole || undefined,
+    };
 
-    const result = await Notification.insertMany(notifications);
+    await prisma.notification.createMany({
+      data: recipientIds.map(userId => ({
+        userId,
+        type: notifType,
+        priority: notifPriority,
+        title,
+        message,
+        read: false,
+        actionUrl: actionUrl || null,
+        metadata,
+      })),
+    });
 
     return NextResponse.json({
       message: `Notification sent to ${recipientIds.length} user(s)`,
-      count: result.length,
-      notificationIds: result.map((n: any) => n._id.toString()),
+      count: recipientIds.length,
     });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Internal server error';

@@ -1,0 +1,186 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ======================== USER ========================
+model User {
+  id           String   @id @default(uuid())
+  name         String
+  firstName    String?
+  lastName     String?
+  email        String   @unique
+  password     String
+  role         String   @default("USER") // SUPER_ADMIN, SUB_AGENT, USER
+  status       String   @default("ACTIVE") // ACTIVE, SUSPENDED, LOCKED
+  avatar       String?
+  phone        String?
+  agentId      String?
+  referredBy   String?
+  lastLogin    DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  wallets      Wallet[]
+  transactions Transaction[]
+  trades       Trade[]
+  notifications Notification[]
+
+  @@index([email])
+  @@index([role])
+  @@index([agentId])
+}
+
+// ======================== WALLET ========================
+model Wallet {
+  id          String   @id @default(uuid())
+  userId      String
+  type        String   @default("SPOT") // SPOT, FUTURES, EARN
+  status      String   @default("ACTIVE") // ACTIVE, FROZEN
+  totalEquity Float    @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  balances    WalletBalance[]
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, type])
+  @@index([userId])
+}
+
+// ======================== WALLET BALANCE ========================
+model WalletBalance {
+  id        String  @id @default(uuid())
+  walletId  String
+  currency  String
+  amount    Float   @default(0)
+  frozen    Float   @default(0)
+
+  wallet Wallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
+
+  @@unique([walletId, currency])
+  @@index([walletId])
+}
+
+// ======================== TRANSACTION ========================
+model Transaction {
+  id          String   @id @default(uuid())
+  userId      String
+  type        String   // DEPOSIT, WITHDRAW, TRADE, COMMISSION, REFERRAL_BONUS, TRANSFER
+  status      String   @default("PENDING") // PENDING, COMPLETED, FAILED, CANCELLED
+  currency    String
+  amount      Float
+  fee         Float    @default(0)
+  fromWallet  String?
+  toWallet    String?
+  tradeId     String?
+  description String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, type])
+  @@index([createdAt(sort: Desc)])
+}
+
+// ======================== TRADE ========================
+model Trade {
+  id         String    @id @default(uuid())
+  userId     String
+  symbol     String
+  side       String    // BUY, SELL
+  type       String    @default("MARKET") // MARKET, LIMIT, STOP_LOSS, TAKE_PROFIT
+  status     String    @default("OPEN") // OPEN, CLOSED, CANCELLED, LIQUIDATED
+  entryPrice Float
+  exitPrice  Float?
+  quantity   Float
+  leverage   Int       @default(1)
+  margin     Float
+  pnl        Float     @default(0)
+  pnlPercent Float     @default(0)
+  stopLoss   Float?
+  takeProfit Float?
+  agentId    String?
+  closedAt   DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, status])
+  @@index([symbol])
+  @@index([agentId])
+  @@index([createdAt(sort: Desc)])
+}
+
+// ======================== REFERRAL ========================
+model Referral {
+  id              String   @id @default(uuid())
+  referrerId      String
+  referredId      String
+  referralCode    String
+  level           Int      @default(1)
+  totalCommission Float    @default(0)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+
+  @@unique([referrerId, referredId])
+  @@index([referrerId])
+  @@index([referredId])
+}
+
+// ======================== INVITATION CODE ========================
+model InvitationCode {
+  id        String    @id @default(uuid())
+  code      String    @unique
+  role      String    // SUB_AGENT, USER
+  createdBy String
+  usedBy    String?
+  status    String    @default("UNUSED") // UNUSED, USED, DISABLED
+  usedAt    DateTime?
+  expiresAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([code])
+}
+
+// ======================== AGENT CONFIG ========================
+model AgentConfig {
+  agentId         String   @unique
+  commissionRate  Float    @default(0.15)
+  referralRate    Float    @default(0.05)
+  maxUsers        Int      @default(100)
+  maxLeverage     Int      @default(100)
+  allowedSymbols  String[] @default(["BTCUSDT", "ETHUSDT", "BNBUSDT"])
+  riskLimit       Float    @default(100000)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// ======================== NOTIFICATION ========================
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  type      String   // SYSTEM, TRADE, WALLET, SECURITY, COMMISSION, REFERRAL
+  priority  String   @default("MEDIUM") // LOW, MEDIUM, HIGH, URGENT
+  title     String
+  message   String
+  read      Boolean  @default(false)
+  actionUrl String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, read])
+  @@index([createdAt(sort: Desc)])
+}

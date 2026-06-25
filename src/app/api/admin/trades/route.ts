@@ -1,14 +1,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
-import { connectDB } from '@/lib/db';
+import prisma from '@/lib/db';
 import { verifyToken, extractBearerToken } from '@/lib/auth';
-import Trade from '@/models/Trade';
-import User from '@/models/User';
+
 
 // GET /api/admin/trades — all trades with filters, optionally analytics mode
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     const token = extractBearerToken(request.headers.get('authorization'));
     if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const payload = verifyToken(token);
@@ -21,108 +19,125 @@ export async function GET(request: NextRequest) {
 
     // ── Analytics mode ──
     if (mode === 'analytics') {
-      const totalTrades = await Trade.countDocuments();
-      const openTrades = await Trade.countDocuments({ status: 'OPEN' });
-      const closedTrades = await Trade.countDocuments({ status: 'CLOSED' });
-      const liquidatedTrades = await Trade.countDocuments({ status: 'LIQUIDATED' });
-
-      const pnlAgg = await Trade.aggregate([
-        { $match: { status: 'CLOSED' } },
-        {
-          $group: {
-            _id: null,
-            totalPnl: { $sum: '$pnl' },
-            totalVolume: { $sum: { $multiply: ['$entryPrice', '$quantity'] } },
-            avgPnl: { $avg: '$pnl' },
-            winCount: { $sum: { $cond: [{ $gt: ['$pnl', 0] }, 1, 0] } },
-            lossCount: { $sum: { $cond: [{ $lt: ['$pnl', 0] }, 1, 0] } },
-          },
-        },
+      const [totalTrades, openTrades, closedTrades, liquidatedTrades] = await Promise.all([
+        prisma.trade.count(),
+        prisma.trade.count({ where: { status: 'OPEN' } }),
+        prisma.trade.count({ where: { status: 'CLOSED' } }),
+        prisma.trade.count({ where: { status: 'LIQUIDATED' } }),
       ]);
 
-      const bySymbol = await Trade.aggregate([
-        { $group: { _id: '$symbol', count: { $sum: 1 }, volume: { $sum: { $multiply: ['$entryPrice', '$quantity'] } } } },
-        { $sort: { volume: -1 } },
-        { $limit: 20 },
-      ]);
+      const pnlAgg = await prisma.trade.aggregate({
+        where: { status: 'CLOSED' },
+        _sum: { pnl: true },
+        _avg: { pnl: true },
+        _count: true,
+      });
 
-      const bySide = await Trade.aggregate([
-        { $group: { _id: '$side', count: { $sum: 1 }, pnl: { $sum: '$pnl' } } },
-      ]);
+      const totalPnl = pnlAgg._sum.pnl || 0;
+      const avgPnl = pnlAgg._avg.pnl || 0;
+      const closedCount = pnlAgg._count || 0;
 
-      const byType = await Trade.aggregate([
-        { $group: { _id: '$type', count: { $sum: 1 } } },
-      ]);
+      const winCount = await prisma.trade.count({ where: { status: 'CLOSED', pnl: { gt: 0 } } });
+      const lossCount = await prisma.trade.count({ where: { status: 'CLOSED', pnl: { lt: 0 } } });
+      const winRate = winCount + lossCount > 0
+        ? parseFloat(((winCount / (winCount + lossCount)) * 100).toFixed(2))
+        : 0;
 
-      const recentDaily = await Trade.aggregate([
-        {
-          $group: {
-            _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
-            count: { $sum: 1 },
-            pnl: { $sum: '$pnl' },
-            volume: { $sum: { $multiply: ['$entryPrice', '$quantity'] } },
-          },
-        },
-        { $sort: { _id: -1 } },
-        { $limit: 30 },
-      ]);
+      // Total volume
+      const volumeAgg = await prisma.trade.aggregate({
+        _sum: { margin: true },
+      });
+      const totalVolume = (volumeAgg._sum.margin || 0) * 100; // approximate
 
-      const topTraders = await Trade.aggregate([
-        { $match: { status: 'CLOSED' } },
-        { $group: { _id: '$userId', tradeCount: { $sum: 1 }, totalPnl: { $sum: '$pnl' } } },
-        { $sort: { totalPnl: -1 } },
-        { $limit: 10 },
-      ]);
-      const topTraderIds = topTraders.map((t) => t._id.toString());
+      // By symbol
+      const bySymbol = await prisma.trade.groupBy({
+        by: ['symbol'],
+        _count: { id: true },
+        _sum: { margin: true },
+        orderBy: { _sum: { margin: 'desc' } },
+        take: 20,
+      });
+
+      // By side
+      const bySide = await prisma.trade.groupBy({
+        by: ['side'],
+        _count: { id: true },
+        _sum: { pnl: true },
+      });
+
+      // By type
+      const byType = await prisma.trade.groupBy({
+        by: ['type'],
+        _count: { id: true },
+      });
+
+      // Recent daily
+      const trades = await prisma.trade.findMany({
+        orderBy: { createdAt: 'desc' },
+        take: 1000,
+      });
+      const dailyMap = new Map<string, { count: number; pnl: number; volume: number }>();
+      for (const t of trades) {
+        const day = t.createdAt.toISOString().split('T')[0];
+        const existing = dailyMap.get(day) || { count: 0, pnl: 0, volume: 0 };
+        existing.count++;
+        existing.pnl += t.pnl || 0;
+        existing.volume += t.entryPrice * t.quantity;
+        dailyMap.set(day, existing);
+      }
+      const recentDaily = Array.from(dailyMap.entries())
+        .map(([date, data]) => ({ _id: date, ...data }))
+        .sort((a, b) => b._id.localeCompare(a._id))
+        .slice(0, 30);
+
+      // Top traders
+      const topTradersAgg = await prisma.trade.groupBy({
+        by: ['userId'],
+        where: { status: 'CLOSED' },
+        _count: { id: true },
+        _sum: { pnl: true },
+        orderBy: { _sum: { pnl: 'desc' } },
+        take: 10,
+      });
+      const topTraderIds = topTradersAgg.map(t => t.userId);
       const traderUsers = topTraderIds.length > 0
-        ? await User.find({ _id: { $in: topTraderIds } }).select('name email').lean()
+        ? await prisma.user.findMany({
+            where: { id: { in: topTraderIds } },
+            select: { id: true, name: true, email: true },
+          })
         : [];
-      const traderMap = new Map(traderUsers.map((u) => [u._id.toString(), u]));
-      const enrichedTopTraders = topTraders.map((t) => ({
-        ...t,
-        user: traderMap.get(t._id.toString()) || null,
+      const traderMap = new Map(traderUsers.map(u => [u.id, u]));
+      const enrichedTopTraders = topTradersAgg.map(t => ({
+        _id: t.userId,
+        tradeCount: t._count.id,
+        totalPnl: t._sum.pnl || 0,
+        user: traderMap.get(t.userId) || null,
       }));
-
-      const agg = pnlAgg[0] || { totalPnl: 0, totalVolume: 0, avgPnl: 0, winCount: 0, lossCount: 0 };
-      const winRate = agg.winCount + agg.lossCount > 0
-        ? ((agg.winCount / (agg.winCount + agg.lossCount)) * 100).toFixed(2)
-        : '0.00';
-
-      const analytics = {
-        summary: {
-          totalTrades,
-          openTrades,
-          closedTrades,
-          liquidatedTrades,
-          totalPnl: agg.totalPnl,
-          totalVolume: agg.totalVolume,
-          avgPnl: agg.avgPnl,
-          winRate: parseFloat(winRate),
-          winningTrades: agg.winCount,
-          losingTrades: agg.lossCount,
-        },
-        bySymbol,
-        bySide,
-        byType,
-        recentDaily,
-        topTraders: enrichedTopTraders,
-      };
 
       if (totalTrades === 0) {
         return NextResponse.json({
           analytics: {
             summary: { totalTrades: 0, openTrades: 0, closedTrades: 0, liquidatedTrades: 0, totalPnl: 0, totalVolume: 0, avgPnl: 0, winRate: 0, winningTrades: 0, losingTrades: 0 },
-            bySymbol: [],
-            bySide: [],
-            byType: [],
-            recentDaily: [],
-            topTraders: [],
+            bySymbol: [], bySide: [], byType: [], recentDaily: [], topTraders: [],
           },
           _note: 'No trades in database. Returned empty analytics.',
         });
       }
 
-      return NextResponse.json({ analytics });
+      return NextResponse.json({
+        analytics: {
+          summary: {
+            totalTrades, openTrades, closedTrades, liquidatedTrades,
+            totalPnl, totalVolume, avgPnl, winRate,
+            winningTrades: winCount, losingTrades: lossCount,
+          },
+          bySymbol: bySymbol.map(s => ({ _id: s.symbol, count: s._count.id, volume: s._sum.margin || 0 })),
+          bySide: bySide.map(s => ({ _id: s.side, count: s._count.id, pnl: s._sum.pnl || 0 })),
+          byType: byType.map(t => ({ _id: t.type, count: t._count.id })),
+          recentDaily,
+          topTraders: enrichedTopTraders,
+        },
+      });
     }
 
     // ── List mode ──
@@ -135,37 +150,39 @@ export async function GET(request: NextRequest) {
     const type = searchParams.get('type') || '';
     const agentId = searchParams.get('agentId') || '';
     const sortBy = searchParams.get('sortBy') || 'createdAt';
-    const sortOrder = searchParams.get('sortOrder') === 'asc' ? 1 : -1;
+    const sortOrder = searchParams.get('sortOrder') === 'asc' ? 'asc' : 'desc';
 
-    const filter: Record<string, any> = {};
-    if (symbol) filter.symbol = symbol.toUpperCase();
-    if (status) filter.status = status;
-    if (side) filter.side = side;
-    if (userId) filter.userId = userId;
-    if (type) filter.type = type;
-    if (agentId) filter.agentId = agentId;
+    const where: any = {};
+    if (symbol) where.symbol = symbol.toUpperCase();
+    if (status) where.status = status;
+    if (side) where.side = side;
+    if (userId) where.userId = userId;
+    if (type) where.type = type;
+    if (agentId) where.agentId = agentId;
 
-    const sort: Record<string, 1 | -1> = {};
-    if (['createdAt', 'pnl', 'margin', 'quantity', 'entryPrice'].includes(sortBy)) {
-      sort[sortBy] = sortOrder as 1 | -1;
-    } else {
-      sort.createdAt = -1;
-    }
+    const validSortFields = ['createdAt', 'pnl', 'margin', 'quantity', 'entryPrice'];
+    const orderByField = validSortFields.includes(sortBy) ? sortBy : 'createdAt';
+    const orderBy: any = { [orderByField]: sortOrder };
 
     const [trades, total] = await Promise.all([
-      Trade.find(filter).sort(sort).skip((page - 1) * limit).limit(limit).lean(),
-      Trade.countDocuments(filter),
+      prisma.trade.findMany({
+        where,
+        orderBy,
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      prisma.trade.count({ where }),
     ]);
 
-    const userIds = [...new Set(trades.map((t) => t.userId))];
+    const userIds = [...new Set(trades.map(t => t.userId))];
     const users = userIds.length > 0
-      ? await User.find({ _id: { $in: userIds } }).select('name email').lean()
+      ? await prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, name: true, email: true } })
       : [];
-    const userMap = new Map(users.map((u) => [u._id.toString(), u]));
+    const userMap = new Map(users.map(u => [u.id, u]));
 
-    const enriched = trades.map((t) => ({
+    const enriched = trades.map(t => ({
       ...t,
-      _id: t._id.toString(),
+      _id: t.id,
       user: userMap.get(t.userId) || null,
     }));
 

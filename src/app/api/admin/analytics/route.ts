@@ -1,15 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { connectDB } from '@/lib/db';
+import prisma from '@/lib/db';
 import { verifyToken, extractBearerToken } from '@/lib/auth';
-import Transaction from '@/models/Transaction';
-import Trade from '@/models/Trade';
-import User from '@/models/User';
-import Wallet from '@/models/Wallet';
+
+function formatDateForGroup(date: Date, period: string): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  if (period === 'monthly') return `${y}-${m}`;
+  if (period === 'weekly') {
+    const jan1 = new Date(y, 0, 1);
+    const weekNum = Math.ceil(((date.getTime() - jan1.getTime()) / 86400000 + jan1.getDay() + 1) / 7);
+    return `${y}-${String(weekNum).padStart(2, '0')}`;
+  }
+  return `${y}-${m}-${d}`;
+}
 
 // GET /api/admin/analytics — revenue & platform analytics
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     const token = extractBearerToken(request.headers.get('authorization'));
     if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const payload = verifyToken(token);
@@ -21,98 +29,87 @@ export async function GET(request: NextRequest) {
     const period = searchParams.get('period') || 'daily';
     const days = Math.min(365, Math.max(1, parseInt(searchParams.get('days') || '30')));
 
-    const dateField = '$createdAt';
-    const dateFormats: Record<string, string> = { daily: '%Y-%m-%d', weekly: '%Y-%U', monthly: '%Y-%m' };
-    const dateFormat = dateFormats[period] || dateFormats.daily;
-
     const since = new Date();
     since.setDate(since.getDate() - days);
 
     const [totalUsers, activeUsers, totalDeposits, totalWithdrawals, commissionTxCount] = await Promise.all([
-      User.countDocuments(),
-      User.countDocuments({ status: 'ACTIVE' }),
-      Transaction.countDocuments({ type: 'DEPOSIT', status: 'COMPLETED', createdAt: { $gte: since } }),
-      Transaction.countDocuments({ type: 'WITHDRAW', status: 'COMPLETED', createdAt: { $gte: since } }),
-      Transaction.countDocuments({ type: 'COMMISSION', createdAt: { $gte: since } }),
+      prisma.user.count(),
+      prisma.user.count({ where: { status: 'ACTIVE' } }),
+      prisma.transaction.count({ where: { type: 'DEPOSIT', status: 'COMPLETED', createdAt: { gte: since } } }),
+      prisma.transaction.count({ where: { type: 'WITHDRAW', status: 'COMPLETED', createdAt: { gte: since } } }),
+      prisma.transaction.count({ where: { type: 'COMMISSION', createdAt: { gte: since } } }),
     ]);
 
-    const depositAgg = await Transaction.aggregate([
-      { $match: { type: 'DEPOSIT', status: 'COMPLETED', createdAt: { $gte: since } } },
-      { $group: { _id: { $dateToString: { format: dateFormat, date: dateField } }, totalAmount: { $sum: '$amount' }, totalFee: { $sum: '$fee' }, count: { $sum: 1 } } },
-      { $sort: { _id: 1 } },
-    ]);
-
-    const withdrawalAgg = await Transaction.aggregate([
-      { $match: { type: 'WITHDRAW', status: 'COMPLETED', createdAt: { $gte: since } } },
-      { $group: { _id: { $dateToString: { format: dateFormat, date: dateField } }, totalAmount: { $sum: '$amount' }, totalFee: { $sum: '$fee' }, count: { $sum: 1 } } },
-      { $sort: { _id: 1 } },
-    ]);
-
-    const commissionAgg = await Transaction.aggregate([
-      { $match: { type: 'COMMISSION', createdAt: { $gte: since } } },
-      { $group: { _id: { $dateToString: { format: dateFormat, date: dateField } }, totalCommission: { $sum: '$amount' }, count: { $sum: 1 } } },
-      { $sort: { _id: 1 } },
-    ]);
-
-    const referralBonusAgg = await Transaction.aggregate([
-      { $match: { type: 'REFERRAL_BONUS', createdAt: { $gte: since } } },
-      { $group: { _id: { $dateToString: { format: dateFormat, date: dateField } }, totalBonus: { $sum: '$amount' }, count: { $sum: 1 } } },
-      { $sort: { _id: 1 } },
-    ]);
-
-    const tradePnlAgg = await Trade.aggregate([
-      { $match: { status: 'CLOSED', createdAt: { $gte: since } } },
-      {
-        $group: {
-          _id: { $dateToString: { format: dateFormat, date: dateField } },
-          totalPnl: { $sum: '$pnl' },
-          totalVolume: { $sum: { $multiply: ['$entryPrice', '$quantity'] } },
-          totalFees: { $sum: { $multiply: ['$margin', 0.001] } },
-          count: { $sum: 1 },
-        },
-      },
-      { $sort: { _id: 1 } },
-    ]);
-
-    // Collect all unique dates
-    const allDates = new Set<string>();
-    [...depositAgg, ...withdrawalAgg, ...commissionAgg, ...referralBonusAgg, ...tradePnlAgg]
-      .forEach((item) => allDates.add(item._id));
-
-    const dateKeys = Array.from(allDates).sort();
-
-    const depositMap = new Map(depositAgg.map((d) => [d._id, d]));
-    const withdrawalMap = new Map(withdrawalAgg.map((d) => [d._id, d]));
-    const commissionMap = new Map(commissionAgg.map((d) => [d._id, d]));
-    const referralMap = new Map(referralBonusAgg.map((d) => [d._id, d]));
-    const tradeMap = new Map(tradePnlAgg.map((d) => [d._id, d]));
-
-    const timeline = dateKeys.map((date) => {
-      const dep = depositMap.get(date) || { totalAmount: 0, totalFee: 0, count: 0 };
-      const wit = withdrawalMap.get(date) || { totalAmount: 0, totalFee: 0, count: 0 };
-      const com = commissionMap.get(date) || { totalCommission: 0, count: 0 };
-      const ref = referralMap.get(date) || { totalBonus: 0, count: 0 };
-      const trd = tradeMap.get(date) || { totalPnl: 0, totalVolume: 0, totalFees: 0, count: 0 };
-
-      return {
-        date,
-        deposits: dep.totalAmount,
-        depositFees: dep.totalFee,
-        depositCount: dep.count,
-        withdrawals: wit.totalAmount,
-        withdrawalFees: wit.totalFee,
-        withdrawalCount: wit.count,
-        commissions: com.totalCommission,
-        commissionCount: com.count,
-        referralBonuses: ref.totalBonus,
-        referralBonusCount: ref.count,
-        tradePnl: trd.totalPnl,
-        tradeVolume: trd.totalVolume,
-        tradeCount: trd.count,
-        netRevenue: dep.totalAmount - wit.totalAmount + com.totalCommission - ref.totalBonus,
-        netFees: dep.totalFee + wit.totalFee + trd.totalFees,
-      };
+    // Fetch all transactions within the period for timeline aggregation
+    const txs = await prisma.transaction.findMany({
+      where: { createdAt: { gte: since } },
     });
+
+    // Fetch trades for PnL timeline
+    const trades = await prisma.trade.findMany({
+      where: { status: 'CLOSED', createdAt: { gte: since } },
+    });
+
+    // Build timeline by grouping in memory
+    const timelineMap = new Map<string, {
+      deposits: number; depositFees: number; depositCount: number;
+      withdrawals: number; withdrawalFees: number; withdrawalCount: number;
+      commissions: number; commissionCount: number;
+      referralBonuses: number; referralBonusCount: number;
+      tradePnl: number; tradeVolume: number; tradeCount: number;
+    }>();
+
+    for (const tx of txs) {
+      const date = formatDateForGroup(tx.createdAt, period);
+      const entry = timelineMap.get(date) || {
+        deposits: 0, depositFees: 0, depositCount: 0,
+        withdrawals: 0, withdrawalFees: 0, withdrawalCount: 0,
+        commissions: 0, commissionCount: 0,
+        referralBonuses: 0, referralBonusCount: 0,
+        tradePnl: 0, tradeVolume: 0, tradeCount: 0,
+      };
+
+      if (tx.type === 'DEPOSIT' && tx.status === 'COMPLETED') {
+        entry.deposits += tx.amount;
+        entry.depositFees += tx.fee;
+        entry.depositCount++;
+      } else if (tx.type === 'WITHDRAW' && tx.status === 'COMPLETED') {
+        entry.withdrawals += tx.amount;
+        entry.withdrawalFees += tx.fee;
+        entry.withdrawalCount++;
+      } else if (tx.type === 'COMMISSION') {
+        entry.commissions += tx.amount;
+        entry.commissionCount++;
+      } else if (tx.type === 'REFERRAL_BONUS') {
+        entry.referralBonuses += tx.amount;
+        entry.referralBonusCount++;
+      }
+      timelineMap.set(date, entry);
+    }
+
+    for (const t of trades) {
+      const date = formatDateForGroup(t.createdAt, period);
+      const entry = timelineMap.get(date) || {
+        deposits: 0, depositFees: 0, depositCount: 0,
+        withdrawals: 0, withdrawalFees: 0, withdrawalCount: 0,
+        commissions: 0, commissionCount: 0,
+        referralBonuses: 0, referralBonusCount: 0,
+        tradePnl: 0, tradeVolume: 0, tradeCount: 0,
+      };
+      entry.tradePnl += t.pnl || 0;
+      entry.tradeVolume += t.entryPrice * t.quantity;
+      entry.tradeCount++;
+      timelineMap.set(date, entry);
+    }
+
+    const timeline = Array.from(timelineMap.entries())
+      .map(([date, data]) => ({
+        date,
+        ...data,
+        netRevenue: data.deposits - data.withdrawals + data.commissions - data.referralBonuses,
+        netFees: data.depositFees + data.withdrawalFees,
+      }))
+      .sort((a, b) => a.date.localeCompare(b.date));
 
     const totals = timeline.reduce(
       (acc, item) => {
@@ -129,9 +126,10 @@ export async function GET(request: NextRequest) {
       { totalDeposits: 0, totalWithdrawals: 0, totalCommissions: 0, totalReferralBonuses: 0, totalTradePnl: 0, totalTradeVolume: 0, totalFees: 0, netRevenue: 0 },
     );
 
-    const equityAgg = await Wallet.aggregate([
-      { $group: { _id: null, totalEquity: { $sum: '$totalEquity' }, walletCount: { $sum: 1 } } },
-    ]);
+    const equityAgg = await prisma.wallet.aggregate({
+      _sum: { totalEquity: true },
+      _count: { id: true },
+    });
 
     const analytics = {
       period,
@@ -142,8 +140,8 @@ export async function GET(request: NextRequest) {
         totalDeposits,
         totalWithdrawals,
         commissionTxCount,
-        platformEquity: equityAgg[0]?.totalEquity || 0,
-        totalWallets: equityAgg[0]?.walletCount || 0,
+        platformEquity: equityAgg._sum.totalEquity || 0,
+        totalWallets: equityAgg._count.id || 0,
       },
       totals,
       timeline,

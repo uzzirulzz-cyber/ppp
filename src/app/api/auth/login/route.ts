@@ -1,13 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { connectDB } from '@/lib/db';
-import User from '@/models/User';
+import prisma from '@/lib/db';
 import { comparePassword, signToken } from '@/lib/auth';
 import { seedDatabase } from '@/lib/seed';
 
 export async function POST(req: NextRequest) {
   try {
-    await connectDB();
-
     // Auto-seed on first login
     await seedDatabase();
 
@@ -16,7 +13,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Email and password required' }, { status: 400 });
     }
 
-    const user = await User.findOne({ email: email.toLowerCase() });
+    const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
     if (!user) {
       return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
     }
@@ -33,29 +30,33 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
     }
 
-    user.lastLogin = new Date();
-    await user.save();
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { lastLogin: new Date() },
+    });
 
     const token = signToken({
-      userId: user._id.toString(),
+      userId: user.id,
       email: user.email,
       role: user.role,
-      agentId: user.agentId,
+      agentId: user.agentId || undefined,
     });
+
+    const { password: _, ...safeUser } = user;
 
     return NextResponse.json({
       token,
       user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        status: user.status,
-        avatar: user.avatar,
-        phone: user.phone,
-        agentId: user.agentId,
-        lastLogin: user.lastLogin,
-        createdAt: user.createdAt,
+        id: safeUser.id,
+        name: safeUser.name,
+        email: safeUser.email,
+        role: safeUser.role,
+        status: safeUser.status,
+        avatar: safeUser.avatar,
+        phone: safeUser.phone,
+        agentId: safeUser.agentId,
+        lastLogin: safeUser.lastLogin,
+        createdAt: safeUser.createdAt,
       },
     });
   } catch (error: any) {

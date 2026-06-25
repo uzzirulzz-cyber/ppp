@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { connectDB } from '@/lib/db';
 import { verifyToken, extractBearerToken } from '@/lib/auth';
 
 interface AuditLogEntry {
@@ -110,7 +109,6 @@ const auditLogs: AuditLogEntry[] = [
 // GET /api/admin/audit — retrieve audit logs
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     const token = extractBearerToken(request.headers.get('authorization'));
     if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const payload = verifyToken(token);
@@ -129,22 +127,16 @@ export async function GET(request: NextRequest) {
 
     let filtered = [...auditLogs];
 
-    if (action) {
-      filtered = filtered.filter((log) => log.action === action);
-    }
-    if (userId) {
-      filtered = filtered.filter((log) => log.userId === userId);
-    }
-    if (targetType) {
-      filtered = filtered.filter((log) => log.targetType === targetType);
-    }
+    if (action) filtered = filtered.filter(log => log.action === action);
+    if (userId) filtered = filtered.filter(log => log.userId === userId);
+    if (targetType) filtered = filtered.filter(log => log.targetType === targetType);
     if (startDate) {
       const start = new Date(startDate);
-      filtered = filtered.filter((log) => new Date(log.createdAt) >= start);
+      filtered = filtered.filter(log => new Date(log.createdAt) >= start);
     }
     if (endDate) {
       const end = new Date(endDate);
-      filtered = filtered.filter((log) => new Date(log.createdAt) <= end);
+      filtered = filtered.filter(log => new Date(log.createdAt) <= end);
     }
 
     filtered.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());

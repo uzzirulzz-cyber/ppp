@@ -1,8 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
-import { connectDB } from '@/lib/db';
+import prisma from '@/lib/db';
 import { verifyToken, extractBearerToken } from '@/lib/auth';
-import User from '@/models/User';
 
 const DEFAULT_SYSTEM_SETTINGS = {
   platformName: 'NexTrade Pro',
@@ -51,7 +50,6 @@ let systemSettings = { ...DEFAULT_SYSTEM_SETTINGS };
 // GET /api/admin/settings — retrieve system settings
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
     const token = extractBearerToken(request.headers.get('authorization'));
     if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const payload = verifyToken(token);
@@ -60,8 +58,8 @@ export async function GET(request: NextRequest) {
     }
 
     const [totalUsers, activeUsers] = await Promise.all([
-      User.countDocuments(),
-      User.countDocuments({ status: 'ACTIVE' }),
+      prisma.user.count(),
+      prisma.user.count({ where: { status: 'ACTIVE' } }),
     ]);
 
     return NextResponse.json({
@@ -78,7 +76,6 @@ export async function GET(request: NextRequest) {
 // PUT /api/admin/settings — update system settings
 export async function PUT(request: NextRequest) {
   try {
-    await connectDB();
     const token = extractBearerToken(request.headers.get('authorization'));
     if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const payload = verifyToken(token);
