@@ -152,7 +152,7 @@ export default function UserManagementPage() {
     { label: 'Total Users', value: stats.total, icon: Users, color: '#0F5EFF' },
     { label: 'Active Users', value: stats.active, icon: UserCheck, color: '#22c55e' },
     { label: 'New Today', value: stats.newToday, icon: UserPlus, color: '#f59e0b' },
-    { label: 'Suspended', value: stats.suspended, icon: UserX, color: '#ef4444' },
+    { label: 'Suspended', value: stats.suspended, icon: UserX, color: '#FF4757' },
   ];
 
   if (loading && users.length === 0) {

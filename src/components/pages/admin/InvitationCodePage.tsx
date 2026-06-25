@@ -150,7 +150,7 @@ export default function InvitationCodePage() {
     { label: 'Total Codes', value: stats.total.toLocaleString(), icon: Ticket, color: '#0F5EFF' },
     { label: 'Used', value: stats.used.toLocaleString(), icon: CheckCircle, color: '#f59e0b' },
     { label: 'Unused', value: stats.unused.toLocaleString(), icon: Clock, color: '#22c55e' },
-    { label: 'Expired', value: stats.expired.toLocaleString(), icon: XCircle, color: '#ef4444' },
+    { label: 'Expired', value: stats.expired.toLocaleString(), icon: XCircle, color: '#FF4757' },
   ];
 
   if (loading && codes.length === 0) {

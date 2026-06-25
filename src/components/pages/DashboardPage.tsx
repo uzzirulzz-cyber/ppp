@@ -86,7 +86,7 @@ function CustomTooltip({ active, payload, label }: { active?: boolean; payload?:
     return (
       <div
         style={{
-          background: 'rgba(17, 24, 39, 0.95)',
+          background: 'rgba(8, 27, 58, 0.95)',
           border: '1px solid var(--border-color)',
           borderRadius: 8,
           padding: '10px 14px',
@@ -110,7 +110,7 @@ export default function DashboardPage() {
 
   const quickActions = [
     { label: 'Deposit', icon: ArrowUpRight, color: '#22c55e', page: Pages.DEPOSIT },
-    { label: 'Withdraw', icon: ArrowDownRight, color: '#ef4444', page: Pages.WITHDRAW },
+    { label: 'Withdraw', icon: ArrowDownRight, color: '#FF4757', page: Pages.WITHDRAW },
     { label: 'Trade', icon: Zap, color: '#0F5EFF', page: Pages.TRADING },
     { label: 'Invite', icon: Users, color: '#f59e0b', page: Pages.REFERRAL },
   ];
@@ -251,13 +251,13 @@ export default function DashboardPage() {
                   dataKey="date"
                   axisLine={false}
                   tickLine={false}
-                  tick={{ fill: '#64748b', fontSize: 11 }}
+                  tick={{ fill: '#7A8599', fontSize: 11 }}
                   interval={4}
                 />
                 <YAxis
                   axisLine={false}
                   tickLine={false}
-                  tick={{ fill: '#64748b', fontSize: 11 }}
+                  tick={{ fill: '#7A8599', fontSize: 11 }}
                   tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`}
                   domain={['dataMin - 5000', 'dataMax + 5000']}
                 />

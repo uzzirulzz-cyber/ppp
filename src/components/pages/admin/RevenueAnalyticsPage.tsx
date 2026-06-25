@@ -18,7 +18,7 @@ const itemVariants = {
   show: { opacity: 1, y: 0, transition: { duration: 0.35, ease: 'easeOut' as const } },
 };
 
-const COLORS = ['#0F5EFF', '#22c55e', '#f59e0b', '#8b5cf6', '#ef4444', '#06b6d4'];
+const COLORS = ['#0F5EFF', '#22c55e', '#f59e0b', '#8b5cf6', '#FF4757', '#06b6d4'];
 
 function generateMockRevenueData() {
   const data = [];
@@ -56,7 +56,7 @@ function generateMockPairData() {
 function ChartTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ value: number; name?: string; color?: string }>; label?: string }) {
   if (active && payload && payload.length) {
     return (
-      <div style={{ background: 'rgba(17, 24, 39, 0.95)', border: '1px solid var(--border-color)', borderRadius: 8, padding: '10px 14px' }}>
+      <div style={{ background: 'rgba(8, 27, 58, 0.95)', border: '1px solid var(--border-color)', borderRadius: 8, padding: '10px 14px' }}>
         <p style={{ color: 'var(--text-muted)', fontSize: 12, marginBottom: 4 }}>{label}</p>
         {payload.map((p, i) => (
           <p key={i} style={{ color: p.color || '#fff', fontSize: 14, fontWeight: 600 }}>
@@ -128,7 +128,7 @@ export default function RevenueAnalyticsPage() {
     { label: 'Total Revenue', value: `$${(stats.totalRevenue || totalRevenueNum).toLocaleString()}`, icon: DollarSign, color: '#22c55e' },
     { label: 'Monthly Revenue', value: `$${stats.monthlyRevenue.toLocaleString()}`, icon: TrendingUp, color: '#0F5EFF' },
     { label: 'Daily Avg', value: `$${stats.dailyAvg.toLocaleString()}`, icon: Calendar, color: '#f59e0b' },
-    { label: 'Growth Rate', value: `${stats.growthRate >= 0 ? '+' : ''}${stats.growthRate}%`, icon: ArrowUpRight, color: stats.growthRate >= 0 ? '#22c55e' : '#ef4444' },
+    { label: 'Growth Rate', value: `${stats.growthRate >= 0 ? '+' : ''}${stats.growthRate}%`, icon: ArrowUpRight, color: stats.growthRate >= 0 ? '#22c55e' : '#FF4757' },
   ];
 
   if (loading) {
@@ -187,9 +187,9 @@ export default function RevenueAnalyticsPage() {
                   <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(42, 48, 65, 0.5)" />
-              <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 11 }} interval={4} />
-              <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 11 }} tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} />
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(192, 199, 209, 0.08)" />
+              <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: '#7A8599', fontSize: 11 }} interval={4} />
+              <YAxis axisLine={false} tickLine={false} tick={{ fill: '#7A8599', fontSize: 11 }} tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} />
               <Tooltip content={<ChartTooltip />} />
               <Area type="monotone" dataKey="revenue" stroke="#22c55e" strokeWidth={2} fill="url(#revGrad)" />
             </AreaChart>
@@ -205,9 +205,9 @@ export default function RevenueAnalyticsPage() {
           <div style={{ width: '100%', height: 260 }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={sourceData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(42, 48, 65, 0.5)" />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 11 }} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 11 }} tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} />
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(192, 199, 209, 0.08)" />
+                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#7A8599', fontSize: 11 }} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#7A8599', fontSize: 11 }} tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} />
                 <Tooltip content={<ChartTooltip />} />
                 <Bar dataKey="value" radius={[6, 6, 0, 0]}>
                   {sourceData.map((_, i) => (

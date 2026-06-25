@@ -92,7 +92,7 @@ function ChartTooltip({ active, payload, label }: { active?: boolean; payload?: 
     return (
       <div
         style={{
-          background: 'rgba(17, 24, 39, 0.95)',
+          background: 'rgba(8, 27, 58, 0.95)',
           border: '1px solid var(--border-color)',
           borderRadius: 8,
           padding: '10px 14px',
@@ -120,7 +120,7 @@ export default function TradingPage() {
   const [sliderPercent, setSliderPercent] = useState(0);
 
   const isBuy = orderSide === 'buy';
-  const sideColor = isBuy ? '#22c55e' : '#ef4444';
+  const sideColor = isBuy ? '#22c55e' : '#FF4757';
   const sideBg = isBuy ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)';
 
   const total = amount ? (parseFloat(amount) * parseFloat(limitPrice || '0')).toFixed(2) : '0.00';
@@ -194,7 +194,7 @@ export default function TradingPage() {
                       <div
                         key={`ask-${i}`}
                         className="flex justify-between items-center relative px-2 py-1.5 rounded text-sm"
-                        style={{ color: '#ef4444' }}
+                        style={{ color: '#FF4757' }}
                       >
                         <div
                           className="absolute right-0 top-0 bottom-0 rounded"
@@ -217,7 +217,7 @@ export default function TradingPage() {
                   className="flex flex-col items-center py-2.5 rounded-lg mb-2"
                   style={{ background: 'var(--bg-primary)' }}
                 >
-                  <span className="text-lg font-bold" style={{ color: isBuy ? '#22c55e' : '#ef4444' }}>
+                  <span className="text-lg font-bold" style={{ color: isBuy ? '#22c55e' : '#FF4757' }}>
                     {midPrice}
                   </span>
                   <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
@@ -277,7 +277,7 @@ export default function TradingPage() {
                       </span>
                       <span
                         className="font-mono font-medium"
-                        style={{ color: trade.isBuy ? '#22c55e' : '#ef4444' }}
+                        style={{ color: trade.isBuy ? '#22c55e' : '#FF4757' }}
                       >
                         {trade.price.toFixed(2)}
                       </span>
@@ -347,18 +347,18 @@ export default function TradingPage() {
                   <stop offset="95%" stopColor="#0F5EFF" stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(42, 48, 65, 0.4)" />
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(192, 199, 209, 0.08)" />
               <XAxis
                 dataKey="time"
                 axisLine={false}
                 tickLine={false}
-                tick={{ fill: '#64748b', fontSize: 10 }}
+                tick={{ fill: '#7A8599', fontSize: 10 }}
                 interval={23}
               />
               <YAxis
                 axisLine={false}
                 tickLine={false}
-                tick={{ fill: '#64748b', fontSize: 10 }}
+                tick={{ fill: '#7A8599', fontSize: 10 }}
                 tickFormatter={(v: number) => `$${(v / 1000).toFixed(1)}k`}
                 domain={['dataMin - 200', 'dataMax + 200']}
               />
@@ -383,14 +383,14 @@ export default function TradingPage() {
               <YAxis hide />
               <Tooltip
                 contentStyle={{
-                  background: 'rgba(17, 24, 39, 0.95)',
+                  background: 'rgba(8, 27, 58, 0.95)',
                   border: '1px solid var(--border-color)',
                   borderRadius: 8,
                   fontSize: 12,
                   color: '#fff',
                 }}
                 itemStyle={{ color: '#94a3b8' }}
-                labelStyle={{ color: '#64748b' }}
+                labelStyle={{ color: '#7A8599' }}
                 formatter={(value: any) => [`${value} BTC`, 'Volume']}
                 labelFormatter={(label: any) => String(label)}
               />
@@ -455,7 +455,7 @@ export default function TradingPage() {
                     className="flex-1 py-2 rounded-md text-sm font-semibold transition-all flex items-center justify-center gap-1.5"
                     style={{
                       background: !isBuy ? 'rgba(239,68,68,0.2)' : 'transparent',
-                      color: !isBuy ? '#ef4444' : 'var(--text-muted)',
+                      color: !isBuy ? '#FF4757' : 'var(--text-muted)',
                       border: 'none',
                       cursor: 'pointer',
                     }}
@@ -598,7 +598,7 @@ export default function TradingPage() {
                   style={{
                     background: isBuy
                       ? 'linear-gradient(135deg, #22c55e, #16a34a)'
-                      : 'linear-gradient(135deg, #ef4444, #dc2626)',
+                      : 'linear-gradient(135deg, #FF4757, #dc2626)',
                     color: '#fff',
                     border: 'none',
                     cursor: 'pointer',
@@ -652,7 +652,7 @@ export default function TradingPage() {
                     className="flex-1 py-2 rounded-md text-sm font-semibold transition-all flex items-center justify-center gap-1.5"
                     style={{
                       background: !isBuy ? 'rgba(239,68,68,0.2)' : 'transparent',
-                      color: !isBuy ? '#ef4444' : 'var(--text-muted)',
+                      color: !isBuy ? '#FF4757' : 'var(--text-muted)',
                       border: 'none',
                       cursor: 'pointer',
                     }}
@@ -747,7 +747,7 @@ export default function TradingPage() {
                   style={{
                     background: isBuy
                       ? 'linear-gradient(135deg, #22c55e, #16a34a)'
-                      : 'linear-gradient(135deg, #ef4444, #dc2626)',
+                      : 'linear-gradient(135deg, #FF4757, #dc2626)',
                     color: '#fff',
                     border: 'none',
                     cursor: 'pointer',
@@ -792,7 +792,7 @@ export default function TradingPage() {
                     className="flex-1 py-2 rounded-md text-sm font-semibold transition-all flex items-center justify-center gap-1.5"
                     style={{
                       background: !isBuy ? 'rgba(239,68,68,0.2)' : 'transparent',
-                      color: !isBuy ? '#ef4444' : 'var(--text-muted)',
+                      color: !isBuy ? '#FF4757' : 'var(--text-muted)',
                       border: 'none',
                       cursor: 'pointer',
                     }}
@@ -892,7 +892,7 @@ export default function TradingPage() {
                   style={{
                     background: isBuy
                       ? 'linear-gradient(135deg, #22c55e, #16a34a)'
-                      : 'linear-gradient(135deg, #ef4444, #dc2626)',
+                      : 'linear-gradient(135deg, #FF4757, #dc2626)',
                     color: '#fff',
                     border: 'none',
                     cursor: 'pointer',
