@@ -1,12 +1,10 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { useStore, Pages } from '@/store/useStore';
 import {
   AreaChart,
   Area,
-  BarChart,
-  Bar,
   XAxis,
   YAxis,
   Tooltip,
@@ -14,903 +12,1414 @@ import {
   CartesianGrid,
 } from 'recharts';
 import {
-  Minus,
-  Plus,
   ArrowUpRight,
   ArrowDownRight,
+  ChevronDown,
+  Loader2,
+  RefreshCw,
+  TrendingUp,
+  TrendingDown,
 } from 'lucide-react';
 
-// ─── Mock Data ───
+// ─── Constants ───
 
-function generatePriceData() {
-  const data = [];
-  let price = 65500;
-  const now = new Date();
-  for (let i = 168; i >= 0; i--) {
-    const date = new Date(now.getTime() - i * 60 * 60 * 1000);
-    const hour = date.getHours();
-    price += (Math.random() - 0.47) * 300;
-    price = Math.max(64000, Math.min(68000, price));
-    const vol = Math.round((Math.random() * 500 + 100) * 100) / 100;
+const COINS = [
+  { symbol: 'BTCUSDT', name: 'BTC/USDT', basePrice: 67245.3, decimals: 2 },
+  { symbol: 'ETHUSDT', name: 'ETH/USDT', basePrice: 3856.42, decimals: 2 },
+  { symbol: 'BNBUSDT', name: 'BNB/USDT', basePrice: 612.85, decimals: 2 },
+  { symbol: 'SOLUSDT', name: 'SOL/USDT', basePrice: 178.36, decimals: 2 },
+  { symbol: 'XRPUSDT', name: 'XRP/USDT', basePrice: 2.4215, decimals: 4 },
+  { symbol: 'ADAUSDT', name: 'ADA/USDT', basePrice: 0.9847, decimals: 4 },
+  { symbol: 'DOGEUSDT', name: 'DOGE/USDT', basePrice: 0.3821, decimals: 4 },
+  { symbol: 'DOTUSDT', name: 'DOT/USDT', basePrice: 8.463, decimals: 3 },
+];
+
+const TIMEFRAMES = ['1m', '5m', '15m', '1H', '4H', '1D', '1W'];
+const ORDER_TYPES = ['Market', 'Limit', 'Stop'] as const;
+const DURATIONS = ['30s', '1m', '5m', '15m', '30m', '1H'];
+
+// ─── Helpers ───
+
+function getCoinInfo(symbol: string) {
+  return COINS.find((c) => c.symbol === symbol) || COINS[0];
+}
+
+function generatePriceData(coin: (typeof COINS)[number], timeframe: string) {
+  const data: { time: string; price: number; volume: number }[] = [];
+  let price = coin.basePrice;
+  const now = Date.now();
+  let intervalMs = 60_000;
+  let count = 120;
+  let formatTime: (d: Date) => string;
+
+  switch (timeframe) {
+    case '1m':
+      intervalMs = 10_000;
+      count = 120;
+      formatTime = (d) => `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
+      break;
+    case '5m':
+      intervalMs = 30_000;
+      count = 100;
+      formatTime = (d) => `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
+      break;
+    case '15m':
+      intervalMs = 60_000;
+      count = 90;
+      formatTime = (d) => `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
+      break;
+    case '1H':
+      intervalMs = 300_000;
+      count = 72;
+      formatTime = (d) => `${d.getHours()}:00`;
+      break;
+    case '4H':
+      intervalMs = 900_000;
+      count = 48;
+      formatTime = (d) => `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:00`;
+      break;
+    case '1D':
+      intervalMs = 3_600_000;
+      count = 60;
+      formatTime = (d) => `${d.getMonth() + 1}/${d.getDate()}`;
+      break;
+    case '1W':
+    default:
+      intervalMs = 21_600_000;
+      count = 50;
+      formatTime = (d) => `${d.getMonth() + 1}/${d.getDate()}`;
+      break;
+  }
+
+  const volatility = coin.basePrice * 0.001;
+
+  for (let i = count; i >= 0; i--) {
+    const date = new Date(now - i * intervalMs);
+    price += (Math.random() - 0.48) * volatility;
+    price = Math.max(coin.basePrice * 0.95, Math.min(coin.basePrice * 1.05, price));
     data.push({
-      time: `${hour}:00`,
-      date: `${date.getMonth() + 1}/${date.getDate()} ${hour}:00`,
-      price: Math.round(price * 100) / 100,
-      volume: vol,
+      time: formatTime(date),
+      price: parseFloat(price.toFixed(coin.decimals)),
+      volume: parseFloat((Math.random() * 500 + 100).toFixed(2)),
     });
   }
+
   return data;
 }
 
-const askOrders = [
-  { price: 67285.50, amount: 1.2345 },
-  { price: 67260.00, amount: 0.8762 },
-  { price: 67245.30, amount: 2.1000 },
-  { price: 67210.80, amount: 0.5430 },
-  { price: 67190.20, amount: 1.6780 },
-];
+function generateOrderBook(currentPrice: number, decimals: number) {
+  const asks = [];
+  const bids = [];
+  const step = currentPrice * 0.0003;
 
-const bidOrders = [
-  { price: 67150.00, amount: 1.4500 },
-  { price: 67120.50, amount: 0.9870 },
-  { price: 67095.00, amount: 1.8200 },
-  { price: 67060.30, amount: 2.3400 },
-  { price: 67030.00, amount: 0.6540 },
-];
-
-const recentTradesBook = [
-  { time: '14:32:15', price: 67245.30, amount: 0.1500, isBuy: true },
-  { time: '14:32:10', price: 67240.00, amount: 0.0800, isBuy: false },
-  { time: '14:31:58', price: 67250.50, amount: 0.3200, isBuy: true },
-  { time: '14:31:45', price: 67235.00, amount: 0.1200, isBuy: false },
-  { time: '14:31:30', price: 67245.00, amount: 0.4500, isBuy: true },
-  { time: '14:31:15', price: 67230.00, amount: 0.0900, isBuy: false },
-  { time: '14:31:02', price: 67238.50, amount: 0.2100, isBuy: true },
-  { time: '14:30:48', price: 67225.00, amount: 0.5600, isBuy: true },
-  { time: '14:30:30', price: 67220.00, amount: 0.1300, isBuy: false },
-  { time: '14:30:15', price: 67228.00, amount: 0.7000, isBuy: true },
-];
-
-const timeframes = ['1m', '5m', '15m', '1H', '4H', '1D', '1W'];
-
-const orderTabs = ['Limit', 'Market', 'Stop'] as const;
-type OrderTab = (typeof orderTabs)[number];
-
-const bookTabs = ['Order Book', 'Recent Trades'] as const;
-type BookTab = (typeof bookTabs)[number];
-
-const maxAmount = Math.max(
-  ...askOrders.map((o) => o.amount),
-  ...bidOrders.map((o) => o.amount),
-);
-
-// ─── Custom Tooltip ───
-function ChartTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ value: number; dataKey: string }>; label?: string }) {
-  if (active && payload && payload.length) {
-    const priceItem = payload.find((p) => p.dataKey === 'price');
-    if (!priceItem) return null;
-    return (
-      <div
-        style={{
-          background: 'rgba(10, 15, 26, 0.95)',
-          border: '1px solid var(--border-color)',
-          borderRadius: 8,
-          padding: '10px 14px',
-        }}
-      >
-        <p style={{ color: 'var(--text-muted)', fontSize: 12, marginBottom: 4 }}>{label}</p>
-        <p style={{ color: '#fff', fontSize: 14, fontWeight: 600 }}>
-          ${priceItem.value.toLocaleString()}
-        </p>
-      </div>
-    );
+  for (let i = 0; i < 8; i++) {
+    asks.push({
+      price: parseFloat((currentPrice + step * (i + 1)).toFixed(decimals)),
+      amount: parseFloat((Math.random() * 3 + 0.1).toFixed(4)),
+    });
+    bids.push({
+      price: parseFloat((currentPrice - step * (i + 1)).toFixed(decimals)),
+      amount: parseFloat((Math.random() * 3 + 0.1).toFixed(4)),
+    });
   }
-  return null;
+
+  asks.sort((a, b) => b.price - a.price);
+  bids.sort((a, b) => b.price - a.price);
+
+  return { asks, bids };
 }
 
-// ─── Component ───
+function generateRecentTrades(currentPrice: number, decimals: number) {
+  const trades = [];
+  const now = new Date();
+  for (let i = 0; i < 15; i++) {
+    const isBuy = Math.random() > 0.5;
+    trades.push({
+      time: new Date(now.getTime() - i * (Math.random() * 30000 + 5000)).toLocaleTimeString(),
+      price: parseFloat((currentPrice + (Math.random() - 0.5) * currentPrice * 0.001).toFixed(decimals)),
+      amount: parseFloat((Math.random() * 2 + 0.01).toFixed(4)),
+      isBuy,
+    });
+  }
+  return trades;
+}
+
+function formatPrice(price: number, decimals: number) {
+  return price.toLocaleString('en-US', {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
+}
+
+function formatUSD(value: number) {
+  return value.toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+// ─── Custom Tooltip ───
+
+function ChartTooltip({
+  active,
+  payload,
+  label,
+  decimals,
+}: {
+  active?: boolean;
+  payload?: Array<{ value: number }>;
+  label?: string;
+  decimals: number;
+}) {
+  if (!active || !payload || !payload.length) return null;
+  return (
+    <div
+      style={{
+        background: '#171c28',
+        border: '1px solid #2a3042',
+        borderRadius: 8,
+        padding: '8px 12px',
+        fontSize: 13,
+      }}
+    >
+      <div style={{ color: '#6b7a8d', marginBottom: 4 }}>{label}</div>
+      <div style={{ color: '#ffffff', fontWeight: 600 }}>
+        ${formatPrice(payload[0].value, decimals)}
+      </div>
+    </div>
+  );
+}
+
+// ─── Main Component ───
+
 export default function TradingPage() {
-  const priceData = useMemo(() => generatePriceData(), []);
-  const [activeTimeframe, setActiveTimeframe] = useState('1H');
-  const [activeBookTab, setActiveBookTab] = useState<BookTab>('Order Book');
-  const [activeOrderTab, setActiveOrderTab] = useState<OrderTab>('Limit');
-  const [orderSide, setOrderSide] = useState<'buy' | 'sell'>('buy');
-  const [limitPrice, setLimitPrice] = useState('67245.30');
+  const { token, navigate, selectedCoin, setSelectedCoin } = useStore();
+
+  // Local state
+  const [coinDropdownOpen, setCoinDropdownOpen] = useState(false);
+  const [timeframe, setTimeframe] = useState('1H');
+  const [orderType, setOrderType] = useState<(typeof ORDER_TYPES)[number]>('Market');
   const [amount, setAmount] = useState('');
-  const [sliderPercent, setSliderPercent] = useState(0);
+  const [limitPrice, setLimitPrice] = useState('');
+  const [stopPrice, setStopPrice] = useState('');
+  const [leverage, setLeverage] = useState(1);
+  const [duration, setDuration] = useState('5m');
+  const [activeTab, setActiveTab] = useState<'orderbook' | 'trades'>('orderbook');
+  const [submitting, setSubmitting] = useState(false);
+  const [submitSide, setSubmitSide] = useState<'BUY' | 'SELL' | null>(null);
+  const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
-  const isBuy = orderSide === 'buy';
-  const sideColor = isBuy ? '#22c55e' : '#FF4757';
-  const sideBg = isBuy ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)';
+  // Data state
+  const [walletBalance, setWalletBalance] = useState(0);
+  const [walletLoading, setWalletLoading] = useState(true);
+  const [currentPrice, setCurrentPrice] = useState(COINS[0].basePrice);
+  const [priceChange24h, setPriceChange24h] = useState(0);
+  const [priceSeed, setPriceSeed] = useState(0);
 
-  const total = amount ? (parseFloat(amount) * parseFloat(limitPrice || '0')).toFixed(2) : '0.00';
+  // Computed coin info
+  const activeCoin = getCoinInfo(selectedCoin || 'BTCUSDT');
 
-  const adjustPrice = (delta: number) => {
-    const current = parseFloat(limitPrice) || 0;
-    setLimitPrice((current + delta).toFixed(2));
-  };
+  // Reset price and form when coin changes (via event handler, not effect)
+  const prevCoinRef = React.useRef(selectedCoin);
+  React.useEffect(() => {
+    if (prevCoinRef.current !== selectedCoin) {
+      prevCoinRef.current = selectedCoin;
+      const coin = getCoinInfo(selectedCoin || 'BTCUSDT');
+      // Use timeout to avoid synchronous setState in effect
+      const handle = setTimeout(() => {
+        setCurrentPrice(coin.basePrice);
+        setPriceChange24h(parseFloat(((Math.random() - 0.4) * 5).toFixed(2)));
+        setPriceSeed(Math.random());
+        setAmount('');
+        setLimitPrice('');
+        setStopPrice('');
+      }, 0);
+      return () => clearTimeout(handle);
+    }
+  }, [selectedCoin]);
 
-  const handleSliderChange = (pct: number) => {
-    setSliderPercent(pct);
-    const balance = 50000;
-    const price = parseFloat(limitPrice) || 0;
-    if (price > 0) {
-      const qty = ((balance * pct) / 100 / price).toFixed(6);
-      setAmount(qty);
+  // Generate chart data (re-generate on coin/timeframe/seed change)
+  const chartData = useMemo(
+    () => generatePriceData(activeCoin, timeframe),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [activeCoin, timeframe, priceSeed]
+  );
+
+  // Generate order book
+  const orderBook = useMemo(
+    () => generateOrderBook(currentPrice, activeCoin.decimals),
+    [currentPrice, activeCoin.decimals]
+  );
+
+  // Generate recent trades
+  const recentTrades = useMemo(
+    () => generateRecentTrades(currentPrice, activeCoin.decimals),
+    [currentPrice, activeCoin.decimals]
+  );
+
+  // Simulate live price tick
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentPrice((prev) => {
+        const tick = prev * (1 + (Math.random() - 0.5) * 0.0003);
+        return parseFloat(tick.toFixed(activeCoin.decimals));
+      });
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [activeCoin.decimals]);
+
+  // Fetch wallet balance
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      if (!token) return;
+      const handle = setTimeout(async () => {
+        if (cancelled) return;
+        setWalletLoading(true);
+        try {
+          const res = await fetch('/api/wallet/balance', {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (res.ok && !cancelled) {
+            const data = await res.json();
+            const usdt = data.balances?.find(
+              (b: { currency: string; amount: number }) => b.currency === 'USDT'
+            );
+            setWalletBalance(usdt?.amount || 0);
+          }
+        } catch {
+          // Silent fail
+        } finally {
+          if (!cancelled) setWalletLoading(false);
+        }
+      }, 0);
+      return () => clearTimeout(handle);
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [token]);
+
+  // Expose fetchWallet for manual refresh
+  const fetchWallet = useCallback(async () => {
+    if (!token) return;
+    setWalletLoading(true);
+    try {
+      const res = await fetch('/api/wallet/balance', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const usdt = data.balances?.find(
+          (b: { currency: string; amount: number }) => b.currency === 'USDT'
+        );
+        setWalletBalance(usdt?.amount || 0);
+      }
+    } catch {
+      // Silent fail
+    } finally {
+      setWalletLoading(false);
+    }
+  }, [token]);
+
+  // Toast auto-dismiss
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => setToast(null), 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [toast]);
+
+  // Derived values
+  const amountNum = parseFloat(amount) || 0;
+  const priceNum = currentPrice;
+  const notionalValue = amountNum * priceNum;
+  const actualMargin = notionalValue / leverage;
+  const maxTradeSize = walletBalance > 0 ? walletBalance : 0;
+
+  // Estimated P&L calculation
+  const estimatedPnl = useMemo(() => {
+    if (amountNum <= 0 || priceNum <= 0) return 0;
+    const durationMultiplier: Record<string, number> = {
+      '30s': 0.002,
+      '1m': 0.005,
+      '5m': 0.015,
+      '15m': 0.03,
+      '30m': 0.05,
+      '1H': 0.08,
+    };
+    const movement = durationMultiplier[duration] || 0.015;
+    const estProfit = notionalValue * movement * leverage * 0.5;
+    return estProfit;
+  }, [amountNum, priceNum, leverage, duration, notionalValue]);
+
+  // Handle trade submission
+  const handleSubmitTrade = async (side: 'BUY' | 'SELL') => {
+    if (!token) {
+      setToast({ type: 'error', message: 'Please login to place trades' });
+      return;
+    }
+
+    const tradeAmount = parseFloat(amount);
+    if (!tradeAmount || tradeAmount <= 0) {
+      setToast({ type: 'error', message: 'Please enter a valid amount' });
+      return;
+    }
+
+    if (orderType === 'Limit') {
+      const lp = parseFloat(limitPrice);
+      if (!lp || lp <= 0) {
+        setToast({ type: 'error', message: 'Please enter a valid limit price' });
+        return;
+      }
+    }
+
+    if (orderType === 'Stop') {
+      const sp = parseFloat(stopPrice);
+      if (!sp || sp <= 0) {
+        setToast({ type: 'error', message: 'Please enter a valid stop price' });
+        return;
+      }
+    }
+
+    setSubmitting(true);
+    setSubmitSide(side);
+
+    try {
+      const body: Record<string, unknown> = {
+        symbol: activeCoin.symbol,
+        side,
+        type: orderType === 'Stop' ? 'MARKET' : orderType.toUpperCase(),
+        quantity: tradeAmount,
+        leverage,
+        price: currentPrice,
+      };
+
+      if (orderType === 'Limit') {
+        body.type = 'LIMIT';
+        body.price = parseFloat(limitPrice);
+      }
+
+      const res = await fetch('/api/trades', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(body),
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        setToast({
+          type: 'success',
+          message: `${side === 'BUY' ? 'BUY UP' : 'SELL DOWN'} ${activeCoin.name} placed successfully!`,
+        });
+        await fetchWallet();
+        setTimeout(() => {
+          navigate(Pages.DASHBOARD);
+        }, 1500);
+      } else {
+        setToast({
+          type: 'error',
+          message: data.error || 'Trade failed. Please try again.',
+        });
+      }
+    } catch {
+      setToast({
+        type: 'error',
+        message: 'Network error. Please check your connection.',
+      });
+    } finally {
+      setSubmitting(false);
+      setSubmitSide(null);
     }
   };
 
-  const spread = (askOrders[0].price - bidOrders[0].price).toFixed(2);
-  const midPrice = ((askOrders[0].price + bidOrders[0].price) / 2).toFixed(2);
+  // Quick amount buttons
+  const quickAmounts = [25, 50, 75, 100];
+  const handleQuickAmount = (pct: number) => {
+    if (maxTradeSize <= 0) return;
+    const usdtAmount = (maxTradeSize * pct) / 100;
+    const qty = usdtAmount / priceNum;
+    setAmount(qty.toFixed(activeCoin.decimals > 2 ? 4 : 2));
+  };
+
+  const priceDecimals = activeCoin.decimals;
+  const isPositive = priceChange24h >= 0;
 
   return (
-    <div className="flex flex-col lg:flex-row gap-3 animate-fade-in" style={{ height: '100%' }}>
-      {/* ─── Left Panel: Order Book ─── */}
+    <div style={{ minHeight: 'calc(100vh - 64px)', padding: '16px 20px', background: 'var(--bg-primary)' }}>
+      {/* Toast Notification */}
+      {toast && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 80,
+            right: 20,
+            zIndex: 9999,
+            padding: '14px 20px',
+            borderRadius: 12,
+            background: toast.type === 'success' ? '#0d3320' : '#3d0f0f',
+            border: `1px solid ${toast.type === 'success' ? '#00d26a' : '#ff3d57'}`,
+            color: toast.type === 'success' ? '#00d26a' : '#ff3d57',
+            fontSize: 14,
+            fontWeight: 500,
+            boxShadow: `0 8px 32px ${toast.type === 'success' ? 'rgba(0,210,106,0.15)' : 'rgba(255,61,87,0.15)'}`,
+            animation: 'slideIn 0.3s ease-out',
+          }}
+        >
+          {toast.type === 'success' ? '✓' : '✕'} {toast.message}
+        </div>
+      )}
+
+      {/* Coin Selector Header */}
       <div
-        className="glass-card flex flex-col lg:w-[30%] min-w-0"
-        style={{ flexShrink: 0 }}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 16,
+          marginBottom: 16,
+          flexWrap: 'wrap',
+        }}
       >
-        {/* Book Tabs */}
-        <div className="flex border-b" style={{ borderColor: 'var(--border-color)' }}>
-          {bookTabs.map((tab) => (
-            <button
-              key={tab}
-              className="flex-1 text-sm font-medium py-3 text-center transition-colors"
+        {/* Coin Dropdown */}
+        <div style={{ position: 'relative' }}>
+          <button
+            onClick={() => setCoinDropdownOpen(!coinDropdownOpen)}
+            className="glass-card"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '10px 16px',
+              border: '1px solid var(--border-color)',
+              borderRadius: 12,
+              background: 'var(--bg-card)',
+              color: '#ffffff',
+              fontSize: 16,
+              fontWeight: 700,
+              cursor: 'pointer',
+              minWidth: 160,
+            }}
+          >
+            {activeCoin.name}
+            <ChevronDown size={16} style={{ color: '#6b7a8d', marginLeft: 'auto' }} />
+          </button>
+          {coinDropdownOpen && (
+            <div
               style={{
-                background: 'none',
-                border: 'none',
-                cursor: 'pointer',
-                color: activeBookTab === tab ? 'var(--text-primary)' : 'var(--text-muted)',
-                borderBottom: activeBookTab === tab ? '2px solid var(--accent-blue)' : '2px solid transparent',
+                position: 'absolute',
+                top: '100%',
+                left: 0,
+                marginTop: 4,
+                background: '#171c28',
+                border: '1px solid #2a3042',
+                borderRadius: 12,
+                padding: 6,
+                zIndex: 100,
+                minWidth: 200,
+                boxShadow: '0 12px 40px rgba(0,0,0,0.5)',
               }}
-              onClick={() => setActiveBookTab(tab)}
             >
-              {tab}
-            </button>
-          ))}
+              {COINS.map((coin) => (
+                <button
+                  key={coin.symbol}
+                  onClick={() => {
+                    setSelectedCoin(coin.symbol);
+                    setCoinDropdownOpen(false);
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    width: '100%',
+                    padding: '10px 14px',
+                    border: 'none',
+                    borderRadius: 8,
+                    background: selectedCoin === coin.symbol ? 'rgba(0,229,255,0.1)' : 'transparent',
+                    color: selectedCoin === coin.symbol ? '#00e5ff' : '#b9c2d0',
+                    fontSize: 14,
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                    transition: 'background 0.15s',
+                  }}
+                  onMouseEnter={(e) => {
+                    if (selectedCoin !== coin.symbol)
+                      (e.target as HTMLElement).style.background = 'rgba(255,255,255,0.04)';
+                  }}
+                  onMouseLeave={(e) => {
+                    if (selectedCoin !== coin.symbol)
+                      (e.target as HTMLElement).style.background = 'transparent';
+                  }}
+                >
+                  <span style={{ fontWeight: 600 }}>{coin.name}</span>
+                  <span style={{ color: '#6b7a8d', fontSize: 12 }}>
+                    ${formatPrice(coin.basePrice, coin.decimals)}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
-        <div className="flex-1 overflow-y-auto p-3">
-          <AnimatePresence mode="wait">
-            {activeBookTab === 'Order Book' ? (
-              <motion.div
-                key="orderbook"
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: 10 }}
-                transition={{ duration: 0.15 }}
-              >
-                {/* Column Headers */}
-                <div className="flex justify-between text-xs mb-2 px-1" style={{ color: 'var(--text-muted)' }}>
-                  <span>Price (USDT)</span>
-                  <span>Amount (BTC)</span>
-                </div>
+        {/* Current Price Display */}
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
+          <span style={{ fontSize: 24, fontWeight: 700, color: '#ffffff' }}>
+            ${formatPrice(currentPrice, priceDecimals)}
+          </span>
+          <span
+            style={{
+              fontSize: 14,
+              fontWeight: 600,
+              color: isPositive ? '#00d26a' : '#ff3d57',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 4,
+            }}
+          >
+            {isPositive ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
+            {isPositive ? '+' : ''}
+            {priceChange24h.toFixed(2)}%
+          </span>
+        </div>
+      </div>
 
-                {/* Asks (red, high to low) */}
-                <div className="space-y-0.5 mb-2">
-                  {askOrders.map((order, i) => {
-                    const depthPct = (order.amount / maxAmount) * 100;
-                    return (
-                      <div
-                        key={`ask-${i}`}
-                        className="flex justify-between items-center relative px-2 py-1.5 rounded text-sm"
-                        style={{ color: '#FF4757' }}
-                      >
-                        <div
-                          className="absolute right-0 top-0 bottom-0 rounded"
-                          style={{
-                            width: `${depthPct}%`,
-                            background: 'rgba(239, 68, 68, 0.1)',
-                          }}
-                        />
-                        <span className="relative font-mono font-medium">{order.price.toFixed(2)}</span>
-                        <span className="relative font-mono" style={{ color: 'var(--text-secondary)' }}>
-                          {order.amount.toFixed(4)}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
+      {/* Close dropdown on outside click */}
+      {coinDropdownOpen && (
+        <div
+          style={{ position: 'fixed', inset: 0, zIndex: 50 }}
+          onClick={() => setCoinDropdownOpen(false)}
+        />
+      )}
 
-                {/* Spread */}
-                <div
-                  className="flex flex-col items-center py-2.5 rounded-lg mb-2"
-                  style={{ background: 'var(--bg-primary)' }}
+      {/* Main 2-Column Layout */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: '1fr 380px',
+          gap: 16,
+          minHeight: 'calc(100vh - 160px)',
+        }}
+        className="trading-grid"
+      >
+        {/* LEFT COLUMN */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
+          {/* Chart Section */}
+          <div
+            className="glass-card"
+            style={{
+              background: 'var(--bg-card)',
+              border: '1px solid var(--border-color)',
+              borderRadius: 16,
+              padding: '16px 20px',
+              flex: '0 0 auto',
+            }}
+          >
+            {/* Timeframe Selector */}
+            <div
+              style={{
+                display: 'flex',
+                gap: 4,
+                marginBottom: 16,
+                flexWrap: 'wrap',
+              }}
+            >
+              {TIMEFRAMES.map((tf) => (
+                <button
+                  key={tf}
+                  onClick={() => setTimeframe(tf)}
+                  style={{
+                    padding: '6px 14px',
+                    borderRadius: 8,
+                    border: 'none',
+                    background: timeframe === tf ? 'rgba(0,229,255,0.12)' : 'transparent',
+                    color: timeframe === tf ? '#00e5ff' : '#6b7a8d',
+                    fontSize: 13,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    transition: 'all 0.15s',
+                  }}
                 >
-                  <span className="text-lg font-bold" style={{ color: isBuy ? '#22c55e' : '#FF4757' }}>
-                    {midPrice}
-                  </span>
-                  <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                    Spread: {spread}
-                  </span>
-                </div>
+                  {tf}
+                </button>
+              ))}
+            </div>
 
-                {/* Bids (green, high to low) */}
-                <div className="space-y-0.5">
-                  {bidOrders.map((order, i) => {
-                    const depthPct = (order.amount / maxAmount) * 100;
-                    return (
-                      <div
-                        key={`bid-${i}`}
-                        className="flex justify-between items-center relative px-2 py-1.5 rounded text-sm"
-                        style={{ color: '#22c55e' }}
-                      >
-                        <div
-                          className="absolute right-0 top-0 bottom-0 rounded"
-                          style={{
-                            width: `${depthPct}%`,
-                            background: 'rgba(34, 197, 94, 0.1)',
-                          }}
-                        />
-                        <span className="relative font-mono font-medium">{order.price.toFixed(2)}</span>
-                        <span className="relative font-mono" style={{ color: 'var(--text-secondary)' }}>
-                          {order.amount.toFixed(4)}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </motion.div>
-            ) : (
-              <motion.div
-                key="recent-trades"
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: 10 }}
-                transition={{ duration: 0.15 }}
-              >
-                {/* Column Headers */}
-                <div className="flex justify-between text-xs mb-2 px-1" style={{ color: 'var(--text-muted)' }}>
-                  <span>Time</span>
+            {/* Chart */}
+            <div style={{ width: '100%', height: 340 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={chartData} margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
+                  <defs>
+                    <linearGradient id="priceGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#f5b400" stopOpacity={0.3} />
+                      <stop offset="50%" stopColor="#00e5ff" stopOpacity={0.15} />
+                      <stop offset="100%" stopColor="#00e5ff" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    stroke="rgba(42,48,66,0.5)"
+                    vertical={false}
+                  />
+                  <XAxis
+                    dataKey="time"
+                    tick={{ fill: '#6b7a8d', fontSize: 11 }}
+                    axisLine={{ stroke: '#2a3042' }}
+                    tickLine={false}
+                    interval="preserveStartEnd"
+                  />
+                  <YAxis
+                    domain={['auto', 'auto']}
+                    tick={{ fill: '#6b7a8d', fontSize: 11 }}
+                    axisLine={{ stroke: '#2a3042' }}
+                    tickLine={false}
+                    tickFormatter={(v: number) => `$${v.toLocaleString()}`}
+                    width={80}
+                  />
+                  <Tooltip content={<ChartTooltip decimals={priceDecimals} />} />
+                  <Area
+                    type="monotone"
+                    dataKey="price"
+                    stroke="#f5b400"
+                    strokeWidth={2}
+                    fill="url(#priceGradient)"
+                    animationDuration={600}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Order Book / Recent Trades Tabs */}
+          <div
+            className="glass-card"
+            style={{
+              background: 'var(--bg-card)',
+              border: '1px solid var(--border-color)',
+              borderRadius: 16,
+              padding: 16,
+              flex: '1 1 auto',
+              minHeight: 300,
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            }}
+          >
+            {/* Tabs */}
+            <div
+              style={{
+                display: 'flex',
+                gap: 0,
+                marginBottom: 16,
+                borderBottom: '1px solid #2a3042',
+              }}
+            >
+              {(['orderbook', 'trades'] as const).map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  style={{
+                    padding: '10px 20px',
+                    border: 'none',
+                    borderBottom: activeTab === tab ? '2px solid #00e5ff' : '2px solid transparent',
+                    background: 'transparent',
+                    color: activeTab === tab ? '#00e5ff' : '#6b7a8d',
+                    fontSize: 14,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  {tab === 'orderbook' ? 'Order Book' : 'Recent Trades'}
+                </button>
+              ))}
+            </div>
+
+            {activeTab === 'orderbook' ? (
+              <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+                {/* Header */}
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: '1fr 1fr',
+                    padding: '6px 12px',
+                    fontSize: 12,
+                    color: '#6b7a8d',
+                    fontWeight: 600,
+                    marginBottom: 4,
+                  }}
+                >
                   <span>Price (USDT)</span>
-                  <span>Amount</span>
+                  <span style={{ textAlign: 'right' }}>Amount</span>
                 </div>
 
-                <div className="space-y-0.5">
-                  {recentTradesBook.map((trade, i) => (
+                {/* Asks (sell orders - red) */}
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+                  {orderBook.asks.map((ask, i) => (
                     <div
-                      key={i}
-                      className="flex justify-between items-center px-2 py-1.5 rounded text-sm"
+                      key={`ask-${i}`}
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: '1fr 1fr',
+                        padding: '4px 12px',
+                        fontSize: 13,
+                        position: 'relative',
+                      }}
                     >
-                      <span className="font-mono" style={{ color: 'var(--text-muted)', fontSize: 12 }}>
-                        {trade.time}
+                      <div
+                        style={{
+                          position: 'absolute',
+                          right: 0,
+                          top: 0,
+                          bottom: 0,
+                          width: `${Math.min(ask.amount / 4 * 100, 100)}%`,
+                          background: 'rgba(255,61,87,0.08)',
+                        }}
+                      />
+                      <span style={{ color: '#ff3d57', position: 'relative', zIndex: 1 }}>
+                        {formatPrice(ask.price, priceDecimals)}
                       </span>
-                      <span
-                        className="font-mono font-medium"
-                        style={{ color: trade.isBuy ? '#22c55e' : '#FF4757' }}
-                      >
-                        {trade.price.toFixed(2)}
-                      </span>
-                      <span className="font-mono" style={{ color: 'var(--text-secondary)' }}>
-                        {trade.amount.toFixed(4)}
+                      <span style={{ color: '#b9c2d0', textAlign: 'right', position: 'relative', zIndex: 1 }}>
+                        {ask.amount.toFixed(4)}
                       </span>
                     </div>
                   ))}
                 </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-      </div>
 
-      {/* ─── Center Panel: Chart ─── */}
-      <div className="glass-card flex flex-col lg:w-[40%] min-w-0" style={{ flexShrink: 0 }}>
-        {/* Symbol Header */}
-        <div className="p-4 pb-2">
-          <div className="flex items-center justify-between flex-wrap gap-2">
-            <div>
-              <h2 className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>
-                BTC/USDT
-              </h2>
-              <div className="flex items-center gap-3 mt-1">
-                <span className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>
-                  $67,245.30
-                </span>
-                <span
-                  className="flex items-center gap-0.5 text-sm font-semibold"
-                  style={{ color: '#22c55e' }}
+                {/* Spread */}
+                <div
+                  style={{
+                    padding: '8px 12px',
+                    textAlign: 'center',
+                    fontSize: 14,
+                    fontWeight: 700,
+                    color: isPositive ? '#00d26a' : '#ff3d57',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 8,
+                    borderTop: '1px solid #2a3042',
+                    borderBottom: '1px solid #2a3042',
+                    margin: '4px 0',
+                  }}
                 >
-                  <ArrowUpRight size={14} />
-                  +2.35%
-                </span>
+                  {isPositive ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
+                  ${formatPrice(currentPrice, priceDecimals)}
+                </div>
+
+                {/* Bids (buy orders - green) */}
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                  {orderBook.bids.map((bid, i) => (
+                    <div
+                      key={`bid-${i}`}
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: '1fr 1fr',
+                        padding: '4px 12px',
+                        fontSize: 13,
+                        position: 'relative',
+                      }}
+                    >
+                      <div
+                        style={{
+                          position: 'absolute',
+                          right: 0,
+                          top: 0,
+                          bottom: 0,
+                          width: `${Math.min(bid.amount / 4 * 100, 100)}%`,
+                          background: 'rgba(0,210,106,0.08)',
+                        }}
+                      />
+                      <span style={{ color: '#00d26a', position: 'relative', zIndex: 1 }}>
+                        {formatPrice(bid.price, priceDecimals)}
+                      </span>
+                      <span style={{ color: '#b9c2d0', textAlign: 'right', position: 'relative', zIndex: 1 }}>
+                        {bid.amount.toFixed(4)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
+            ) : (
+              <div style={{ flex: 1, overflow: 'hidden' }}>
+                {/* Recent Trades Header */}
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: '1fr 1fr 1fr 60px',
+                    padding: '6px 12px',
+                    fontSize: 12,
+                    color: '#6b7a8d',
+                    fontWeight: 600,
+                    marginBottom: 4,
+                  }}
+                >
+                  <span>Time</span>
+                  <span>Price</span>
+                  <span style={{ textAlign: 'right' }}>Amount</span>
+                  <span style={{ textAlign: 'right' }}>Side</span>
+                </div>
+
+                <div className="data-table" style={{ maxHeight: 300, overflowY: 'auto' }}>
+                  {recentTrades.map((trade, i) => (
+                    <div
+                      key={`trade-${i}`}
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: '1fr 1fr 1fr 60px',
+                        padding: '5px 12px',
+                        fontSize: 13,
+                        borderBottom: '1px solid rgba(42,48,66,0.3)',
+                      }}
+                    >
+                      <span style={{ color: '#6b7a8d' }}>{trade.time}</span>
+                      <span style={{ color: trade.isBuy ? '#00d26a' : '#ff3d57' }}>
+                        {formatPrice(trade.price, priceDecimals)}
+                      </span>
+                      <span style={{ color: '#b9c2d0', textAlign: 'right' }}>
+                        {trade.amount.toFixed(4)}
+                      </span>
+                      <span style={{ textAlign: 'right' }}>
+                        <span
+                          className={trade.isBuy ? 'badge-green' : 'badge-red'}
+                          style={{
+                            padding: '2px 8px',
+                            borderRadius: 4,
+                            fontSize: 11,
+                            fontWeight: 600,
+                          }}
+                        >
+                          {trade.isBuy ? 'BUY' : 'SELL'}
+                        </span>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Timeframe Buttons */}
-        <div className="flex gap-1 px-4 pb-2">
-          {timeframes.map((tf) => (
-            <button
-              key={tf}
-              className="text-xs font-medium px-3 py-1.5 rounded-md transition-colors"
+        {/* RIGHT COLUMN - Trading Panel */}
+        <div className="trade-box" style={{ display: 'flex', flexDirection: 'column', gap: 0, height: 'fit-content' }}>
+          {/* Wallet Balance */}
+          <div style={{ padding: '16px 20px 0' }}>
+            <div
               style={{
-                background: activeTimeframe === tf ? 'var(--accent-blue)' : 'transparent',
-                color: activeTimeframe === tf ? '#fff' : 'var(--text-muted)',
-                border: 'none',
-                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: 16,
               }}
-              onClick={() => setActiveTimeframe(tf)}
             >
-              {tf}
-            </button>
-          ))}
-        </div>
-
-        {/* Price Chart */}
-        <div className="flex-1 px-2" style={{ minHeight: 250 }}>
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={priceData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
-              <defs>
-                <linearGradient id="priceGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#E53935" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="#E53935" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(192, 199, 209, 0.08)" />
-              <XAxis
-                dataKey="time"
-                axisLine={false}
-                tickLine={false}
-                tick={{ fill: '#7A8599', fontSize: 10 }}
-                interval={23}
-              />
-              <YAxis
-                axisLine={false}
-                tickLine={false}
-                tick={{ fill: '#7A8599', fontSize: 10 }}
-                tickFormatter={(v: number) => `$${(v / 1000).toFixed(1)}k`}
-                domain={['dataMin - 200', 'dataMax + 200']}
-              />
-              <Tooltip content={<ChartTooltip />} />
-              <Area
-                type="monotone"
-                dataKey="price"
-                stroke="#E53935"
-                strokeWidth={2}
-                fill="url(#priceGradient)"
-                isAnimationActive={false}
-              />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-
-        {/* Volume Bars */}
-        <div className="px-2 pb-3" style={{ height: 80 }}>
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={priceData} margin={{ top: 0, right: 5, left: -20, bottom: 0 }}>
-              <XAxis dataKey="time" hide />
-              <YAxis hide />
-              <Tooltip
-                contentStyle={{
-                  background: 'rgba(10, 15, 26, 0.95)',
-                  border: '1px solid var(--border-color)',
+              <div>
+                <div style={{ fontSize: 12, color: '#6b7a8d', marginBottom: 4 }}>Available Balance</div>
+                <div style={{ fontSize: 20, fontWeight: 700, color: '#ffffff' }}>
+                  {walletLoading ? (
+                    <Loader2 size={18} style={{ display: 'inline', color: '#6b7a8d' }} className="spin" />
+                  ) : (
+                    <>${formatUSD(walletBalance)}</>
+                  )}
+                </div>
+              </div>
+              <button
+                onClick={fetchWallet}
+                style={{
+                  background: 'rgba(0,229,255,0.08)',
+                  border: '1px solid rgba(0,229,255,0.2)',
                   borderRadius: 8,
-                  fontSize: 12,
-                  color: '#fff',
+                  padding: '6px 10px',
+                  color: '#00e5ff',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
                 }}
-                itemStyle={{ color: '#94a3b8' }}
-                labelStyle={{ color: '#7A8599' }}
-                formatter={(value: any) => [`${value} BTC`, 'Volume']}
-                labelFormatter={(label: any) => String(label)}
-              />
-              <Bar dataKey="volume" fill="#E53935" opacity={0.4} radius={[2, 2, 0, 0]} isAnimationActive={false} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
+                title="Refresh balance"
+              >
+                <RefreshCw size={14} />
+              </button>
+            </div>
 
-      {/* ─── Right Panel: Place Order ─── */}
-      <div className="glass-card flex flex-col lg:w-[30%] min-w-0" style={{ flexShrink: 0 }}>
-        {/* Order Tabs */}
-        <div className="flex border-b" style={{ borderColor: 'var(--border-color)' }}>
-          {orderTabs.map((tab) => (
-            <button
-              key={tab}
-              className="flex-1 text-sm font-medium py-3 text-center transition-colors"
+            {/* Price + 24h Change */}
+            <div
               style={{
-                background: 'none',
-                border: 'none',
-                cursor: 'pointer',
-                color: activeOrderTab === tab ? 'var(--text-primary)' : 'var(--text-muted)',
-                borderBottom: activeOrderTab === tab ? '2px solid var(--accent-blue)' : '2px solid transparent',
+                display: 'flex',
+                alignItems: 'baseline',
+                gap: 10,
+                marginBottom: 16,
               }}
-              onClick={() => setActiveOrderTab(tab)}
             >
-              {tab}
+              <span style={{ fontSize: 22, fontWeight: 800, color: '#ffffff' }}>
+                ${formatPrice(currentPrice, priceDecimals)}
+              </span>
+              <span
+                style={{
+                  fontSize: 13,
+                  fontWeight: 600,
+                  padding: '3px 8px',
+                  borderRadius: 6,
+                  background: isPositive ? 'rgba(0,210,106,0.12)' : 'rgba(255,61,87,0.12)',
+                  color: isPositive ? '#00d26a' : '#ff3d57',
+                }}
+              >
+                {isPositive ? '+' : ''}{priceChange24h.toFixed(2)}%
+              </span>
+            </div>
+
+            {/* Order Type Tabs */}
+            <div
+              style={{
+                display: 'flex',
+                gap: 0,
+                marginBottom: 16,
+                background: 'rgba(255,255,255,0.03)',
+                borderRadius: 10,
+                padding: 3,
+              }}
+            >
+              {ORDER_TYPES.map((type) => (
+                <button
+                  key={type}
+                  onClick={() => setOrderType(type)}
+                  style={{
+                    flex: 1,
+                    padding: '8px 0',
+                    border: 'none',
+                    borderRadius: 8,
+                    background: orderType === type ? 'rgba(0,229,255,0.12)' : 'transparent',
+                    color: orderType === type ? '#00e5ff' : '#6b7a8d',
+                    fontSize: 13,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  {type}
+                </button>
+              ))}
+            </div>
+
+            {/* Amount Input */}
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ fontSize: 12, color: '#6b7a8d', display: 'block', marginBottom: 6 }}>
+                Amount ({activeCoin.symbol.replace('USDT', '')})
+              </label>
+              <div className="trade-input" style={{ position: 'relative' }}>
+                <input
+                  type="number"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  placeholder="0.00"
+                  step="any"
+                  className="trade-input"
+                  style={{
+                    width: '100%',
+                    background: '#1b2232',
+                    border: '1px solid #2d364b',
+                    borderRadius: 12,
+                    padding: '12px 80px 12px 16px',
+                    color: '#ffffff',
+                    fontSize: 15,
+                    fontWeight: 600,
+                    outline: 'none',
+                    transition: 'border-color 0.2s, box-shadow 0.2s',
+                  }}
+                  onFocus={(e) => {
+                    e.target.style.borderColor = '#00e5ff';
+                    e.target.style.boxShadow = '0 0 0 3px rgba(0,229,255,0.1)';
+                  }}
+                  onBlur={(e) => {
+                    e.target.style.borderColor = '#2d364b';
+                    e.target.style.boxShadow = 'none';
+                  }}
+                />
+                <div
+                  style={{
+                    position: 'absolute',
+                    right: 12,
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    fontSize: 12,
+                    color: '#6b7a8d',
+                    textAlign: 'right',
+                  }}
+                >
+                  <div style={{ fontWeight: 600 }}>≈ ${notionalValue > 0 ? formatUSD(notionalValue) : '0.00'}</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Quick Amount Buttons */}
+            <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
+              {quickAmounts.map((pct) => (
+                <button
+                  key={pct}
+                  onClick={() => handleQuickAmount(pct)}
+                  style={{
+                    flex: 1,
+                    padding: '6px 0',
+                    border: '1px solid #2d364b',
+                    borderRadius: 8,
+                    background: 'transparent',
+                    color: '#b9c2d0',
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    transition: 'all 0.15s',
+                  }}
+                  onMouseEnter={(e) => {
+                    (e.currentTarget as HTMLElement).style.borderColor = '#00e5ff';
+                    (e.currentTarget as HTMLElement).style.color = '#00e5ff';
+                  }}
+                  onMouseLeave={(e) => {
+                    (e.currentTarget as HTMLElement).style.borderColor = '#2d364b';
+                    (e.currentTarget as HTMLElement).style.color = '#b9c2d0';
+                  }}
+                >
+                  {pct}%
+                </button>
+              ))}
+            </div>
+
+            {/* Limit Price Input (shown for Limit orders) */}
+            {orderType === 'Limit' && (
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ fontSize: 12, color: '#6b7a8d', display: 'block', marginBottom: 6 }}>
+                  Limit Price (USDT)
+                </label>
+                <input
+                  type="number"
+                  value={limitPrice}
+                  onChange={(e) => setLimitPrice(e.target.value)}
+                  placeholder={formatPrice(currentPrice, priceDecimals)}
+                  step="any"
+                  className="trade-input"
+                  style={{
+                    width: '100%',
+                    background: '#1b2232',
+                    border: '1px solid #2d364b',
+                    borderRadius: 12,
+                    padding: '12px 16px',
+                    color: '#ffffff',
+                    fontSize: 15,
+                    fontWeight: 600,
+                    outline: 'none',
+                    transition: 'border-color 0.2s, box-shadow 0.2s',
+                  }}
+                  onFocus={(e) => {
+                    e.target.style.borderColor = '#00e5ff';
+                    e.target.style.boxShadow = '0 0 0 3px rgba(0,229,255,0.1)';
+                  }}
+                  onBlur={(e) => {
+                    e.target.style.borderColor = '#2d364b';
+                    e.target.style.boxShadow = 'none';
+                  }}
+                />
+              </div>
+            )}
+
+            {/* Stop Price Input (shown for Stop orders) */}
+            {orderType === 'Stop' && (
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ fontSize: 12, color: '#6b7a8d', display: 'block', marginBottom: 6 }}>
+                  Stop Price (USDT)
+                </label>
+                <input
+                  type="number"
+                  value={stopPrice}
+                  onChange={(e) => setStopPrice(e.target.value)}
+                  placeholder={formatPrice(currentPrice, priceDecimals)}
+                  step="any"
+                  className="trade-input"
+                  style={{
+                    width: '100%',
+                    background: '#1b2232',
+                    border: '1px solid #2d364b',
+                    borderRadius: 12,
+                    padding: '12px 16px',
+                    color: '#ffffff',
+                    fontSize: 15,
+                    fontWeight: 600,
+                    outline: 'none',
+                    transition: 'border-color 0.2s, box-shadow 0.2s',
+                  }}
+                  onFocus={(e) => {
+                    e.target.style.borderColor = '#00e5ff';
+                    e.target.style.boxShadow = '0 0 0 3px rgba(0,229,255,0.1)';
+                  }}
+                  onBlur={(e) => {
+                    e.target.style.borderColor = '#2d364b';
+                    e.target.style.boxShadow = 'none';
+                  }}
+                />
+              </div>
+            )}
+
+            {/* Leverage Slider */}
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                <label style={{ fontSize: 12, color: '#6b7a8d' }}>Leverage</label>
+                <span
+                  style={{
+                    fontSize: 14,
+                    fontWeight: 700,
+                    color: leverage > 20 ? '#ff3d57' : leverage > 10 ? '#f5b400' : '#00e5ff',
+                  }}
+                >
+                  {leverage}x
+                </span>
+              </div>
+              <input
+                type="range"
+                min={1}
+                max={100}
+                value={leverage}
+                onChange={(e) => setLeverage(parseInt(e.target.value))}
+                style={{
+                  width: '100%',
+                  height: 6,
+                  borderRadius: 3,
+                  appearance: 'none',
+                  background: `linear-gradient(to right, #00e5ff 0%, #f5b400 ${leverage}%, #2d364b ${leverage}%, #2d364b 100%)`,
+                  outline: 'none',
+                  cursor: 'pointer',
+                }}
+              />
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  marginTop: 4,
+                  fontSize: 11,
+                  color: '#6b7a8d',
+                }}
+              >
+                <span>1x</span>
+                <span>25x</span>
+                <span>50x</span>
+                <span>75x</span>
+                <span>100x</span>
+              </div>
+            </div>
+
+            {/* Duration Selection */}
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ fontSize: 12, color: '#6b7a8d', display: 'block', marginBottom: 8 }}>
+                Duration
+              </label>
+              <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                {DURATIONS.map((d) => (
+                  <button
+                    key={d}
+                    onClick={() => setDuration(d)}
+                    style={{
+                      padding: '6px 12px',
+                      borderRadius: 8,
+                      border: '1px solid',
+                      borderColor: duration === d ? '#00e5ff' : '#2d364b',
+                      background: duration === d ? 'rgba(0,229,255,0.08)' : 'transparent',
+                      color: duration === d ? '#00e5ff' : '#6b7a8d',
+                      fontSize: 12,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      transition: 'all 0.15s',
+                    }}
+                  >
+                    {d}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Estimated P&L */}
+            {amountNum > 0 && (
+              <div
+                style={{
+                  padding: '12px 16px',
+                  borderRadius: 12,
+                  background: 'rgba(0,229,255,0.04)',
+                  border: '1px solid rgba(0,229,255,0.1)',
+                  marginBottom: 16,
+                }}
+              >
+                <div style={{ fontSize: 12, color: '#6b7a8d', marginBottom: 4 }}>Estimated P&L</div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: '#00e5ff' }}>
+                  +${formatUSD(estimatedPnl)}
+                </div>
+                <div style={{ fontSize: 11, color: '#6b7a8d', marginTop: 2 }}>
+                  Margin: ${formatUSD(actualMargin)} · Notional: ${formatUSD(notionalValue)}
+                </div>
+              </div>
+            )}
+
+            {/* BUY UP Button */}
+            <button
+              className="buy-up"
+              onClick={() => handleSubmitTrade('BUY')}
+              disabled={submitting}
+              style={{
+                width: '100%',
+                padding: '16px 0',
+                borderRadius: 14,
+                border: 'none',
+                background: submitting && submitSide === 'BUY'
+                  ? 'rgba(0,210,106,0.5)'
+                  : 'linear-gradient(135deg, #00d26a 0%, #00a854 100%)',
+                color: '#ffffff',
+                fontSize: 16,
+                fontWeight: 700,
+                cursor: submitting ? 'not-allowed' : 'pointer',
+                marginBottom: 10,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                transition: 'opacity 0.2s',
+                opacity: submitting && submitSide !== 'BUY' ? 0.5 : 1,
+                letterSpacing: 0.5,
+              }}
+            >
+              {submitting && submitSide === 'BUY' ? (
+                <Loader2 size={20} className="spin" />
+              ) : (
+                <ArrowUpRight size={20} />
+              )}
+              {submitting && submitSide === 'BUY' ? 'Placing Order...' : 'BUY UP / CALL'}
             </button>
-          ))}
-        </div>
 
-        <div className="flex-1 p-4 overflow-y-auto">
-          <AnimatePresence mode="wait">
-            {activeOrderTab === 'Limit' && (
-              <motion.div
-                key="limit"
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                transition={{ duration: 0.15 }}
-                className="space-y-4"
-              >
-                {/* Buy / Sell Toggle */}
-                <div
-                  className="flex rounded-lg p-1"
-                  style={{ background: 'var(--bg-primary)' }}
-                >
-                  <button
-                    className="flex-1 py-2 rounded-md text-sm font-semibold transition-all flex items-center justify-center gap-1.5"
-                    style={{
-                      background: isBuy ? 'rgba(34,197,94,0.2)' : 'transparent',
-                      color: isBuy ? '#22c55e' : 'var(--text-muted)',
-                      border: 'none',
-                      cursor: 'pointer',
-                    }}
-                    onClick={() => setOrderSide('buy')}
-                  >
-                    <ArrowUpRight size={14} />
-                    Buy
-                  </button>
-                  <button
-                    className="flex-1 py-2 rounded-md text-sm font-semibold transition-all flex items-center justify-center gap-1.5"
-                    style={{
-                      background: !isBuy ? 'rgba(239,68,68,0.2)' : 'transparent',
-                      color: !isBuy ? '#FF4757' : 'var(--text-muted)',
-                      border: 'none',
-                      cursor: 'pointer',
-                    }}
-                    onClick={() => setOrderSide('sell')}
-                  >
-                    <ArrowDownRight size={14} />
-                    Sell
-                  </button>
-                </div>
-
-                {/* Price Input */}
-                <div>
-                  <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>
-                    Price (USDT)
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <button
-                      className="flex items-center justify-center rounded-md transition-colors"
-                      style={{
-                        width: 36,
-                        height: 40,
-                        background: 'var(--bg-primary)',
-                        border: '1px solid var(--border-color)',
-                        color: 'var(--text-secondary)',
-                        cursor: 'pointer',
-                        flexShrink: 0,
-                      }}
-                      onClick={() => adjustPrice(-0.1)}
-                    >
-                      <Minus size={14} />
-                    </button>
-                    <input
-                      type="text"
-                      className="input-field text-center font-mono"
-                      value={limitPrice}
-                      onChange={(e) => setLimitPrice(e.target.value)}
-                    />
-                    <button
-                      className="flex items-center justify-center rounded-md transition-colors"
-                      style={{
-                        width: 36,
-                        height: 40,
-                        background: 'var(--bg-primary)',
-                        border: '1px solid var(--border-color)',
-                        color: 'var(--text-secondary)',
-                        cursor: 'pointer',
-                        flexShrink: 0,
-                      }}
-                      onClick={() => adjustPrice(0.1)}
-                    >
-                      <Plus size={14} />
-                    </button>
-                  </div>
-                </div>
-
-                {/* Amount Input */}
-                <div>
-                  <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>
-                    Amount (BTC)
-                  </label>
-                  <input
-                    type="text"
-                    className="input-field font-mono"
-                    placeholder="0.000000"
-                    value={amount}
-                    onChange={(e) => {
-                      setAmount(e.target.value);
-                      setSliderPercent(0);
-                    }}
-                  />
-                </div>
-
-                {/* Percentage Slider */}
-                <div>
-                  <div className="flex justify-between mb-1.5">
-                    {([25, 50, 75, 100] as const).map((pct) => (
-                      <button
-                        key={pct}
-                        className="text-xs font-medium px-3 py-1 rounded transition-colors"
-                        style={{
-                          background: sliderPercent === pct ? sideBg : 'var(--bg-primary)',
-                          color: sliderPercent === pct ? sideColor : 'var(--text-muted)',
-                          border: `1px solid ${sliderPercent === pct ? sideColor : 'var(--border-color)'}`,
-                          cursor: 'pointer',
-                        }}
-                        onClick={() => handleSliderChange(pct)}
-                      >
-                        {pct}%
-                      </button>
-                    ))}
-                  </div>
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    value={sliderPercent}
-                    onChange={(e) => handleSliderChange(parseInt(e.target.value))}
-                    className="w-full"
-                    style={{
-                      WebkitAppearance: 'none',
-                      appearance: 'none',
-                      height: 4,
-                      borderRadius: 2,
-                      background: `linear-gradient(to right, ${sideColor} ${sliderPercent}%, var(--border-color) ${sliderPercent}%)`,
-                      outline: 'none',
-                      cursor: 'pointer',
-                    }}
-                  />
-                </div>
-
-                {/* Total Display */}
-                <div
-                  className="flex justify-between items-center p-3 rounded-lg"
-                  style={{ background: 'var(--bg-primary)' }}
-                >
-                  <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-                    Total
-                  </span>
-                  <span className="text-sm font-semibold font-mono" style={{ color: 'var(--text-primary)' }}>
-                    {total} USDT
-                  </span>
-                </div>
-
-                {/* Available Balance */}
-                <div
-                  className="flex justify-between items-center p-3 rounded-lg"
-                  style={{ background: 'var(--bg-primary)' }}
-                >
-                  <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                    Available Balance
-                  </span>
-                  <span className="text-xs font-medium font-mono" style={{ color: 'var(--text-secondary)' }}>
-                    50,000.00 USDT
-                  </span>
-                </div>
-
-                {/* Submit Button */}
-                <motion.button
-                  className="w-full py-3 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-1.5"
-                  style={{
-                    background: isBuy
-                      ? 'linear-gradient(135deg, #22c55e, #16a34a)'
-                      : 'linear-gradient(135deg, #FF4757, #dc2626)',
-                    color: '#fff',
-                    border: 'none',
-                    cursor: 'pointer',
-                  }}
-                  whileHover={{ scale: 1.02, boxShadow: `0 4px 20px ${isBuy ? 'rgba(34,197,94,0.4)' : 'rgba(239,68,68,0.4)'}` }}
-                  whileTap={{ scale: 0.98 }}
-                >
-                  {isBuy ? (
-                    <>
-                      <ArrowUpRight size={16} />
-                      Buy BTC
-                    </>
-                  ) : (
-                    <>
-                      <ArrowDownRight size={16} />
-                      Sell BTC
-                    </>
-                  )}
-                </motion.button>
-              </motion.div>
-            )}
-
-            {activeOrderTab === 'Market' && (
-              <motion.div
-                key="market"
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                transition={{ duration: 0.15 }}
-                className="space-y-4"
-              >
-                {/* Buy / Sell Toggle */}
-                <div
-                  className="flex rounded-lg p-1"
-                  style={{ background: 'var(--bg-primary)' }}
-                >
-                  <button
-                    className="flex-1 py-2 rounded-md text-sm font-semibold transition-all flex items-center justify-center gap-1.5"
-                    style={{
-                      background: isBuy ? 'rgba(34,197,94,0.2)' : 'transparent',
-                      color: isBuy ? '#22c55e' : 'var(--text-muted)',
-                      border: 'none',
-                      cursor: 'pointer',
-                    }}
-                    onClick={() => setOrderSide('buy')}
-                  >
-                    <ArrowUpRight size={14} />
-                    Buy
-                  </button>
-                  <button
-                    className="flex-1 py-2 rounded-md text-sm font-semibold transition-all flex items-center justify-center gap-1.5"
-                    style={{
-                      background: !isBuy ? 'rgba(239,68,68,0.2)' : 'transparent',
-                      color: !isBuy ? '#FF4757' : 'var(--text-muted)',
-                      border: 'none',
-                      cursor: 'pointer',
-                    }}
-                    onClick={() => setOrderSide('sell')}
-                  >
-                    <ArrowDownRight size={14} />
-                    Sell
-                  </button>
-                </div>
-
-                {/* Amount Input */}
-                <div>
-                  <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>
-                    Amount (BTC)
-                  </label>
-                  <input
-                    type="text"
-                    className="input-field font-mono"
-                    placeholder="0.000000"
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                  />
-                </div>
-
-                {/* Percentage Slider */}
-                <div>
-                  <div className="flex justify-between mb-1.5">
-                    {([25, 50, 75, 100] as const).map((pct) => (
-                      <button
-                        key={pct}
-                        className="text-xs font-medium px-3 py-1 rounded transition-colors"
-                        style={{
-                          background: sliderPercent === pct ? sideBg : 'var(--bg-primary)',
-                          color: sliderPercent === pct ? sideColor : 'var(--text-muted)',
-                          border: `1px solid ${sliderPercent === pct ? sideColor : 'var(--border-color)'}`,
-                          cursor: 'pointer',
-                        }}
-                        onClick={() => handleSliderChange(pct)}
-                      >
-                        {pct}%
-                      </button>
-                    ))}
-                  </div>
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    value={sliderPercent}
-                    onChange={(e) => handleSliderChange(parseInt(e.target.value))}
-                    className="w-full"
-                    style={{
-                      WebkitAppearance: 'none',
-                      appearance: 'none',
-                      height: 4,
-                      borderRadius: 2,
-                      background: `linear-gradient(to right, ${sideColor} ${sliderPercent}%, var(--border-color) ${sliderPercent}%)`,
-                      outline: 'none',
-                      cursor: 'pointer',
-                    }}
-                  />
-                </div>
-
-                {/* Total */}
-                <div
-                  className="flex justify-between items-center p-3 rounded-lg"
-                  style={{ background: 'var(--bg-primary)' }}
-                >
-                  <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>Total</span>
-                  <span className="text-sm font-semibold font-mono" style={{ color: 'var(--text-primary)' }}>
-                    {total} USDT
-                  </span>
-                </div>
-
-                {/* Balance */}
-                <div
-                  className="flex justify-between items-center p-3 rounded-lg"
-                  style={{ background: 'var(--bg-primary)' }}
-                >
-                  <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Available Balance</span>
-                  <span className="text-xs font-medium font-mono" style={{ color: 'var(--text-secondary)' }}>50,000.00 USDT</span>
-                </div>
-
-                {/* Market Price Note */}
-                <div className="text-center py-1">
-                  <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                    Market price: <span className="font-mono font-medium" style={{ color: 'var(--text-primary)' }}>$67,245.30</span>
-                  </span>
-                </div>
-
-                <motion.button
-                  className="w-full py-3 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-1.5"
-                  style={{
-                    background: isBuy
-                      ? 'linear-gradient(135deg, #22c55e, #16a34a)'
-                      : 'linear-gradient(135deg, #FF4757, #dc2626)',
-                    color: '#fff',
-                    border: 'none',
-                    cursor: 'pointer',
-                  }}
-                  whileHover={{ scale: 1.02, boxShadow: `0 4px 20px ${isBuy ? 'rgba(34,197,94,0.4)' : 'rgba(239,68,68,0.4)'}` }}
-                  whileTap={{ scale: 0.98 }}
-                >
-                  {isBuy ? (
-                    <><ArrowUpRight size={16} /> Buy BTC</>
-                  ) : (
-                    <><ArrowDownRight size={16} /> Sell BTC</>
-                  )}
-                </motion.button>
-              </motion.div>
-            )}
-
-            {activeOrderTab === 'Stop' && (
-              <motion.div
-                key="stop"
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                transition={{ duration: 0.15 }}
-                className="space-y-4"
-              >
-                {/* Buy / Sell Toggle */}
-                <div className="flex rounded-lg p-1" style={{ background: 'var(--bg-primary)' }}>
-                  <button
-                    className="flex-1 py-2 rounded-md text-sm font-semibold transition-all flex items-center justify-center gap-1.5"
-                    style={{
-                      background: isBuy ? 'rgba(34,197,94,0.2)' : 'transparent',
-                      color: isBuy ? '#22c55e' : 'var(--text-muted)',
-                      border: 'none',
-                      cursor: 'pointer',
-                    }}
-                    onClick={() => setOrderSide('buy')}
-                  >
-                    <ArrowUpRight size={14} />
-                    Buy
-                  </button>
-                  <button
-                    className="flex-1 py-2 rounded-md text-sm font-semibold transition-all flex items-center justify-center gap-1.5"
-                    style={{
-                      background: !isBuy ? 'rgba(239,68,68,0.2)' : 'transparent',
-                      color: !isBuy ? '#FF4757' : 'var(--text-muted)',
-                      border: 'none',
-                      cursor: 'pointer',
-                    }}
-                    onClick={() => setOrderSide('sell')}
-                  >
-                    <ArrowDownRight size={14} />
-                    Sell
-                  </button>
-                </div>
-
-                {/* Stop Price */}
-                <div>
-                  <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>
-                    Stop Price (USDT)
-                  </label>
-                  <input
-                    type="text"
-                    className="input-field font-mono"
-                    placeholder="0.00"
-                  />
-                </div>
-
-                {/* Amount Input */}
-                <div>
-                  <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>
-                    Amount (BTC)
-                  </label>
-                  <input
-                    type="text"
-                    className="input-field font-mono"
-                    placeholder="0.000000"
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                  />
-                </div>
-
-                {/* Percentage Slider */}
-                <div>
-                  <div className="flex justify-between mb-1.5">
-                    {([25, 50, 75, 100] as const).map((pct) => (
-                      <button
-                        key={pct}
-                        className="text-xs font-medium px-3 py-1 rounded transition-colors"
-                        style={{
-                          background: sliderPercent === pct ? sideBg : 'var(--bg-primary)',
-                          color: sliderPercent === pct ? sideColor : 'var(--text-muted)',
-                          border: `1px solid ${sliderPercent === pct ? sideColor : 'var(--border-color)'}`,
-                          cursor: 'pointer',
-                        }}
-                        onClick={() => handleSliderChange(pct)}
-                      >
-                        {pct}%
-                      </button>
-                    ))}
-                  </div>
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    value={sliderPercent}
-                    onChange={(e) => handleSliderChange(parseInt(e.target.value))}
-                    className="w-full"
-                    style={{
-                      WebkitAppearance: 'none',
-                      appearance: 'none',
-                      height: 4,
-                      borderRadius: 2,
-                      background: `linear-gradient(to right, ${sideColor} ${sliderPercent}%, var(--border-color) ${sliderPercent}%)`,
-                      outline: 'none',
-                      cursor: 'pointer',
-                    }}
-                  />
-                </div>
-
-                {/* Total */}
-                <div
-                  className="flex justify-between items-center p-3 rounded-lg"
-                  style={{ background: 'var(--bg-primary)' }}
-                >
-                  <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>Total</span>
-                  <span className="text-sm font-semibold font-mono" style={{ color: 'var(--text-primary)' }}>
-                    {total} USDT
-                  </span>
-                </div>
-
-                {/* Balance */}
-                <div
-                  className="flex justify-between items-center p-3 rounded-lg"
-                  style={{ background: 'var(--bg-primary)' }}
-                >
-                  <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Available Balance</span>
-                  <span className="text-xs font-medium font-mono" style={{ color: 'var(--text-secondary)' }}>50,000.00 USDT</span>
-                </div>
-
-                <motion.button
-                  className="w-full py-3 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-1.5"
-                  style={{
-                    background: isBuy
-                      ? 'linear-gradient(135deg, #22c55e, #16a34a)'
-                      : 'linear-gradient(135deg, #FF4757, #dc2626)',
-                    color: '#fff',
-                    border: 'none',
-                    cursor: 'pointer',
-                  }}
-                  whileHover={{ scale: 1.02, boxShadow: `0 4px 20px ${isBuy ? 'rgba(34,197,94,0.4)' : 'rgba(239,68,68,0.4)'}` }}
-                  whileTap={{ scale: 0.98 }}
-                >
-                  {isBuy ? (
-                    <><ArrowUpRight size={16} /> Stop Buy BTC</>
-                  ) : (
-                    <><ArrowDownRight size={16} /> Stop Sell BTC</>
-                  )}
-                </motion.button>
-              </motion.div>
-            )}
-          </AnimatePresence>
+            {/* SELL DOWN Button */}
+            <button
+              className="buy-down"
+              onClick={() => handleSubmitTrade('SELL')}
+              disabled={submitting}
+              style={{
+                width: '100%',
+                padding: '16px 0',
+                borderRadius: 14,
+                border: 'none',
+                background: submitting && submitSide === 'SELL'
+                  ? 'rgba(255,61,87,0.5)'
+                  : 'linear-gradient(135deg, #ff3d57 0%, #d42e44 100%)',
+                color: '#ffffff',
+                fontSize: 16,
+                fontWeight: 700,
+                cursor: submitting ? 'not-allowed' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                transition: 'opacity 0.2s',
+                opacity: submitting && submitSide !== 'SELL' ? 0.5 : 1,
+                letterSpacing: 0.5,
+              }}
+            >
+              {submitting && submitSide === 'SELL' ? (
+                <Loader2 size={20} className="spin" />
+              ) : (
+                <ArrowDownRight size={20} />
+              )}
+              {submitting && submitSide === 'SELL' ? 'Placing Order...' : 'SELL DOWN / PUT'}
+            </button>
+          </div>
         </div>
       </div>
+
+      {/* Responsive Styles */}
+      <style jsx global>{`
+        .trading-grid {
+          display: grid;
+          grid-template-columns: 1fr 380px;
+        }
+
+        @keyframes slideIn {
+          from { opacity: 0; transform: translateX(40px); }
+          to { opacity: 1; transform: translateX(0); }
+        }
+
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+
+        .spin {
+          animation: spin 1s linear infinite;
+        }
+
+        @media (max-width: 900px) {
+          .trading-grid {
+            grid-template-columns: 1fr !important;
+          }
+        }
+
+        .trade-input::-webkit-inner-spin-button,
+        .trade-input::-webkit-outer-spin-button {
+          -webkit-appearance: none;
+          margin: 0;
+        }
+        .trade-input[type='number'] {
+          -moz-appearance: textfield;
+        }
+
+        .trade-input:focus {
+          border-color: #00e5ff !important;
+          box-shadow: 0 0 0 3px rgba(0,229,255,0.1) !important;
+          outline: none;
+        }
+
+        input[type='range']::-webkit-slider-thumb {
+          -webkit-appearance: none;
+          appearance: none;
+          width: 18px;
+          height: 18px;
+          border-radius: 50%;
+          background: #ffffff;
+          cursor: pointer;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+          border: 2px solid #00e5ff;
+        }
+
+        input[type='range']::-moz-range-thumb {
+          width: 18px;
+          height: 18px;
+          border-radius: 50%;
+          background: #ffffff;
+          cursor: pointer;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+          border: 2px solid #00e5ff;
+        }
+
+        .data-table::-webkit-scrollbar {
+          width: 4px;
+        }
+        .data-table::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .data-table::-webkit-scrollbar-thumb {
+          background: #2a3042;
+          border-radius: 4px;
+        }
+
+        .badge-green {
+          background: rgba(0,210,106,0.12);
+          color: #00d26a;
+        }
+        .badge-red {
+          background: rgba(255,61,87,0.12);
+          color: #ff3d57;
+        }
+
+        .glass-card {
+          background: var(--bg-card);
+          border: 1px solid var(--border-color);
+        }
+
+        .trade-box {
+          background: var(--bg-secondary, #10141d);
+          border: 1px solid rgba(255,255,255,0.08);
+          border-radius: 20px;
+        }
+      `}</style>
     </div>
   );
 }

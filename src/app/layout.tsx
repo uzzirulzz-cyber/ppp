@@ -17,8 +17,8 @@ export default function RootLayout({
   return (
     <html lang="en" className={inter.variable}>
       <head>
-        <title>NexTrade Pro</title>
-        <meta name="description" content="Professional Crypto Trading Platform" />
+        <title>Brock Exchange</title>
+        <meta name="description" content="Brock Exchange — Professional Crypto Trading Platform" />
       </head>
       <body
         className="h-screen overflow-hidden"

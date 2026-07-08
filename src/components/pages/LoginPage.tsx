@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Mail, Lock, Loader2, Eye, EyeOff } from 'lucide-react';
+import Image from 'next/image';
 import { useStore, Pages } from '@/store/useStore';
 
 export default function LoginPage() {
@@ -42,6 +43,8 @@ export default function LoginPage() {
       }
 
       setAuth(data.user, data.token);
+
+      // The page.tsx useEffect will auto-redirect to CHANGE_PASSWORD if mustChangePassword
     } catch {
       setError('Network error. Please check your connection.');
     } finally {
@@ -56,7 +59,7 @@ export default function LoginPage() {
     >
       {/* Subtle grid background */}
       <div
-        className="absolute inset-0 opacity-[0.03]"
+        className="absolute inset-0 opacity-[0.03] pointer-events-none"
         style={{
           backgroundImage:
             'linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)',
@@ -66,23 +69,23 @@ export default function LoginPage() {
 
       {/* Glow orbs */}
       <div
-        className="absolute rounded-full"
+        className="absolute rounded-full pointer-events-none"
         style={{
           width: 400,
           height: 400,
           top: '-10%',
           right: '-5%',
-          background: 'radial-gradient(circle, rgba(229,57,53,0.08) 0%, transparent 70%)',
+          background: 'radial-gradient(circle, rgba(245,180,0,0.08) 0%, transparent 70%)',
         }}
       />
       <div
-        className="absolute rounded-full"
+        className="absolute rounded-full pointer-events-none"
         style={{
           width: 350,
           height: 350,
           bottom: '-8%',
           left: '-5%',
-          background: 'radial-gradient(circle, rgba(139,92,246,0.08) 0%, transparent 70%)',
+          background: 'radial-gradient(circle, rgba(0,229,255,0.06) 0%, transparent 70%)',
         }}
       />
 
@@ -100,13 +103,19 @@ export default function LoginPage() {
             style={{
               width: 56,
               height: 56,
-              background: 'linear-gradient(135deg, #E53935, #FFD700)',
+              background: 'var(--gradient)',
             }}
           >
-            <span style={{ fontSize: 28 }}>⚡</span>
+            <Image
+              src="/logo.png"
+              alt="Brock Exchange"
+              width={36}
+              height={36}
+              style={{ borderRadius: 8 }}
+            />
           </div>
           <h1 className="gradient-text" style={{ fontSize: 28, fontWeight: 800, letterSpacing: '-0.02em' }}>
-            NexTrade Pro
+            Brock Exchange
           </h1>
           <p style={{ color: 'var(--text-muted)', fontSize: 14, marginTop: 6 }}>
             Professional Crypto Trading Platform
@@ -159,7 +168,7 @@ export default function LoginPage() {
                 type={showPassword ? 'text' : 'password'}
                 className="input-field"
                 style={{ paddingLeft: 40, paddingRight: 40 }}
-                placeholder="••••••••"
+                placeholder="Enter your password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 autoComplete="current-password"
@@ -182,8 +191,8 @@ export default function LoginPage() {
               animate={{ opacity: 1, y: 0 }}
               className="px-3 py-2 rounded-lg text-center"
               style={{
-                background: 'rgba(239,68,68,0.1)',
-                border: '1px solid rgba(239,68,68,0.2)',
+                background: 'rgba(255, 61, 87, 0.1)',
+                border: '1px solid rgba(255, 61, 87, 0.2)',
                 color: 'var(--accent-red)',
                 fontSize: 13,
               }}
@@ -212,7 +221,7 @@ export default function LoginPage() {
           Don&apos;t have an account?{' '}
           <button
             className="bg-transparent border-none cursor-pointer"
-            style={{ color: 'var(--accent-blue)', fontWeight: 600, fontSize: 13 }}
+            style={{ color: 'var(--accent-cyan)', fontWeight: 600, fontSize: 13 }}
             onClick={() => navigate(Pages.REGISTER)}
           >
             Create one

@@ -1,0 +1,479 @@
+     1→'use client';
+     2→
+     3→import React, { useState, useEffect, useMemo, Suspense } from 'react';
+     4→import { motion, AnimatePresence } from 'framer-motion';
+     5→import {
+     6→  Mail, Lock, Loader2, Eye, EyeOff,
+     7→  Shield, Zap, TrendingUp, Smartphone,
+     8→  User, Ticket, ArrowLeft, Phone, CheckCircle,
+     9→} from 'lucide-react';
+    10→import { useRouter, useSearchParams } from 'next/navigation';
+    11→import Image from 'next/image';
+    12→
+    13→/* ─── Subtle floating orbs ─── */
+    14→function FloatingCards() {
+    15→  const cards = useMemo(() => [
+    16→    { color: 'rgba(59, 130, 246, 0.04)', x: '15%', y: '20%', delay: 0, size: 120, rotate: -12 },
+    17→    { color: 'rgba(99, 102, 241, 0.04)', x: '70%', y: '15%', delay: 1.5, size: 100, rotate: 8 },
+    18→    { color: 'rgba(59, 130, 246, 0.03)', x: '25%', y: '65%', delay: 3, size: 90, rotate: -5 },
+    19→    { color: 'rgba(99, 102, 241, 0.03)', x: '75%', y: '70%', delay: 2, size: 110, rotate: 15 },
+    20→  ], []);
+    21→
+    22→  return (
+    23→    <div className="absolute inset-0 overflow-hidden pointer-events-none">
+    24→      {cards.map((c, i) => (
+    25→        <motion.div
+    26→          key={i}
+    27→          className="absolute rounded-2xl"
+    28→          style={{ left: c.x, top: c.y, width: c.size, height: c.size * 0.6, background: c.color, rotate: c.rotate }}
+    29→          animate={{ y: [0, -20, 0, 15, 0], rotate: [c.rotate, c.rotate + 5, c.rotate - 3, c.rotate + 2, c.rotate] }}
+    30→          transition={{ duration: 8 + i * 2, repeat: Infinity, delay: c.delay, ease: 'easeInOut' }}
+    31→        />
+    32→      ))}
+    33→    </div>
+    34→  );
+    35→}
+    36→
+    37→/* ─── Ticker Tape ─── */
+    38→function TickerTape() {
+    39→  const items = [
+    40→    { label: 'JazzCash', status: 'Online' },
+    41→    { label: 'Easypaisa', status: 'Online' },
+    42→    { label: 'Bank Transfer', status: 'Online' },
+    43→    { label: 'Visa', status: 'Online' },
+    44→    { label: 'Mastercard', status: 'Online' },
+    45→    { label: 'Secure Pay', status: '256-bit' },
+    46→  ];
+    47→
+    48→  return (
+    49→    <div className="absolute top-0 left-0 right-0 overflow-hidden" style={{ height: 36, background: 'rgba(9, 9, 11, 0.95)', borderBottom: '1px solid var(--border-color)' }}>
+    50→      <motion.div
+    51→        className="flex gap-8 items-center whitespace-nowrap"
+    52→        style={{ padding: '8px 0' }}
+    53→        animate={{ x: ['0%', '-50%'] }}
+    54→        transition={{ duration: 25, repeat: Infinity, ease: 'linear' }}
+    55→      >
+    56→        {[...items, ...items, ...items, ...items].map((item, i) => (
+    57→          <span key={i} className="flex items-center gap-2" style={{ fontSize: 12, minWidth: 140 }}>
+    58→            <span style={{ color: '#A1A1AA', fontWeight: 500 }}>{item.label}</span>
+    59→            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full" style={{ fontSize: 10, fontWeight: 500, background: 'rgba(34, 197, 94, 0.08)', color: '#4ade80' }}>
+    60→              <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#4ade80' }} />
+    61→              {item.status}
+    62→            </span>
+    63→          </span>
+    64→        ))}
+    65→      </motion.div>
+    66→    </div>
+    67→  );
+    68→}
+    69→
+    70→/* ─── LOGIN FORM ─── */
+    71→function LoginForm({ onSwitchToRegister, onLoginSuccess }: { onSwitchToRegister: () => void; onLoginSuccess: (user: any, token: string) => void }) {
+    72→  const [email, setEmail] = useState('');
+    73→  const [password, setPassword] = useState('');
+    74→  const [showPassword, setShowPassword] = useState(false);
+    75→  const [error, setError] = useState('');
+    76→  const [loading, setLoading] = useState(false);
+    77→  const [focused, setFocused] = useState<string | null>(null);
+    78→
+    79→  async function handleSubmit(e: React.FormEvent) {
+    80→    e.preventDefault();
+    81→    setError('');
+    82→    if (!email.trim()) { setError('Email is required'); return; }
+    83→    if (!password) { setError('Password is required'); return; }
+    84→    setLoading(true);
+    85→    try {
+    86→      const res = await fetch('/api/auth/login', {
+    87→        method: 'POST',
+    88→        headers: { 'Content-Type': 'application/json' },
+    89→        body: JSON.stringify({ email: email.trim(), password }),
+    90→      });
+    91→      const data = await res.json();
+    92→      if (!res.ok) { setError(data.error || 'Login failed. Please try again.'); return; }
+    93→      onLoginSuccess(data.user, data.token);
+    94→    } catch { setError('Network error. Please check your connection.'); } finally { setLoading(false); }
+    95→  }
+    96→
+    97→  return (
+    98→    <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+    99→      <div>
+   100→        <label className="block mb-2" style={{ fontSize: 12, fontWeight: 500, color: '#A1A1AA', letterSpacing: '0.04em', textTransform: 'uppercase' }}>Email Address</label>
+   101→        <motion.div animate={focused === 'email' ? { borderColor: 'rgba(59,130,246,0.5)' } : {}} style={{ borderRadius: 8, border: '1px solid var(--border-color)', transition: 'border-color 0.2s' }}>
+   102→          <div className="relative">
+   103→            <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2" style={{ color: focused === 'email' ? '#3B82F6' : '#71717A', transition: 'color 0.2s' }} />
+   104→            <input type="email" className="input-field" style={{ paddingLeft: 42, border: 'none', borderRadius: 8, background: 'transparent' }} placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} onFocus={() => setFocused('email')} onBlur={() => setFocused(null)} autoComplete="email" />
+   105→          </div>
+   106→        </motion.div>
+   107→      </div>
+   108→      <div>
+   109→        <label className="block mb-2" style={{ fontSize: 12, fontWeight: 500, color: '#A1A1AA', letterSpacing: '0.04em', textTransform: 'uppercase' }}>Password</label>
+   110→        <motion.div animate={focused === 'password' ? { borderColor: 'rgba(59,130,246,0.5)' } : {}} style={{ borderRadius: 8, border: '1px solid var(--border-color)', transition: 'border-color 0.2s' }}>
+   111→          <div className="relative">
+   112→            <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2" style={{ color: focused === 'password' ? '#3B82F6' : '#71717A', transition: 'color 0.2s' }} />
+   113→            <input type={showPassword ? 'text' : 'password'} className="input-field" style={{ paddingLeft: 42, paddingRight: 42, border: 'none', borderRadius: 8, background: 'transparent' }} placeholder="Enter your password" value={password} onChange={(e) => setPassword(e.target.value)} onFocus={() => setFocused('password')} onBlur={() => setFocused(null)} autoComplete="current-password" />
+   114→            <button type="button" className="absolute right-3.5 top-1/2 -translate-y-1/2 bg-transparent border-none cursor-pointer" style={{ color: '#71717A' }} onClick={() => setShowPassword(!showPassword)}>
+   115→              {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+   116→            </button>
+   117→          </div>
+   118→        </motion.div>
+   119→      </div>
+   120→      <AnimatePresence>
+   121→        {error && (
+   122→          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
+   123→            <div className="px-3.5 py-2.5 rounded-lg flex items-center gap-2" style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.15)' }}>
+   124→              <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: '#f87171' }} />
+   125→              <span style={{ color: '#f87171', fontSize: 13, fontWeight: 500 }}>{error}</span>
+   126→            </div>
+   127→          </motion.div>
+   128→        )}
+   129→      </AnimatePresence>
+   130→      <motion.button type="submit" className="w-full flex items-center justify-center gap-2" style={{ padding: '14px 20px', fontSize: 15, fontWeight: 600, color: '#FAFAFA', border: 'none', borderRadius: 8, cursor: 'pointer', background: loading ? 'var(--bg-hover)' : 'var(--gradient-brand)', boxShadow: loading ? 'none' : 'var(--shadow-sm)', fontFamily: "var(--font-poppins), 'Poppins', sans-serif" }} disabled={loading} whileHover={!loading ? { scale: 1.01 } : {}} whileTap={!loading ? { scale: 0.99 } : {}}>
+   131→        {loading ? <Loader2 size={18} className="animate-spin" /> : null}
+   132→        {loading ? 'Authenticating...' : 'Sign In'}
+   133→      </motion.button>
+   134→      <p className="text-center" style={{ fontSize: 14, color: '#A1A1AA' }}>
+   135→        New to NexTrade?{' '}
+   136→        <button type="button" className="bg-transparent border-none cursor-pointer" style={{ color: '#3B82F6', fontWeight: 600, fontSize: 14 }} onClick={onSwitchToRegister}>
+   137→          Create Account
+   138→        </button>
+   139→      </p>
+   140→    </form>
+   141→  );
+   142→}
+   143→
+   144→/* ─── REGISTER FORM ─── */
+   145→function RegisterForm({ onSwitchToLogin, onRegisterSuccess }: { onSwitchToLogin: () => void; onRegisterSuccess: (user: any, token: string) => void }) {
+   146→  const [name, setName] = useState('');
+   147→  const [email, setEmail] = useState('');
+   148→  const [phone, setPhone] = useState('');
+   149→  const [password, setPassword] = useState('');
+   150→  const [confirmPassword, setConfirmPassword] = useState('');
+   151→  const [code, setCode] = useState('');
+   152→  const [showPassword, setShowPassword] = useState(false);
+   153→  const [showConfirm, setShowConfirm] = useState(false);
+   154→  const [error, setError] = useState('');
+   155→  const [errors, setErrors] = useState<Record<string, string>>({});
+   156→  const [loading, setLoading] = useState(false);
+   157→
+   158→  useEffect(() => {
+   159→    const saved = localStorage.getItem('nextrade_invitation_code');
+   160→    if (saved) { setCode(saved); localStorage.removeItem('nextrade_invitation_code'); }
+   161→  }, []);
+   162→
+   163→  function validate(): boolean {
+   164→    const errs: Record<string, string> = {};
+   165→    if (!name.trim()) errs.name = 'Name is required';
+   166→    else if (name.trim().length < 2) errs.name = 'Name must be at least 2 characters';
+   167→    if (!email.trim()) errs.email = 'Email is required';
+   168→    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) errs.email = 'Invalid email format';
+   169→    if (!password) errs.password = 'Password is required';
+   170→    else if (password.length < 6) errs.password = 'Password must be at least 6 characters';
+   171→    if (!confirmPassword) errs.confirmPassword = 'Please confirm your password';
+   172→    else if (password !== confirmPassword) errs.confirmPassword = 'Passwords do not match';
+   173→    setErrors(errs);
+   174→    return Object.keys(errs).length === 0;
+   175→  }
+   176→
+   177→  async function handleSubmit(e: React.FormEvent) {
+   178→    e.preventDefault();
+   179→    setError('');
+   180→    if (!validate()) return;
+   181→    setLoading(true);
+   182→    try {
+   183→      const res = await fetch('/api/auth/register', {
+   184→        method: 'POST',
+   185→        headers: { 'Content-Type': 'application/json' },
+   186→        body: JSON.stringify({ name: name.trim(), email: email.trim(), phone: phone.trim() || undefined, password, invitationCode: code.trim() || undefined }),
+   187→      });
+   188→      const data = await res.json();
+   189→      if (!res.ok) { setError(data.error || 'Registration failed.'); return; }
+   190→      if (data.token && data.user) { onRegisterSuccess(data.user, data.token); }
+   191→    } catch { setError('Network error.'); } finally { setLoading(false); }
+   192→  }
+   193→
+   194→  function fieldError(field: string) {
+   195→    return errors[field] ? <span style={{ color: '#f87171', fontSize: 12, marginTop: 4, display: 'block' }}>{errors[field]}</span> : null;
+   196→  }
+   197→
+   198→  return (
+   199→    <form onSubmit={handleSubmit} className="flex flex-col gap-3.5">
+   200→      <div>
+   201→        <label className="block mb-1.5" style={{ fontSize: 12, fontWeight: 500, color: '#A1A1AA', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Full Name</label>
+   202→        <div className="relative">
+   203→          <User size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2" style={{ color: '#71717A' }} />
+   204→          <input type="text" className="input-field" style={{ paddingLeft: 42 }} placeholder="John Doe" value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" />
+   205→        </div>
+   206→        {fieldError('name')}
+   207→      </div>
+   208→      <div>
+   209→        <label className="block mb-1.5" style={{ fontSize: 12, fontWeight: 500, color: '#A1A1AA', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Email Address</label>
+   210→        <div className="relative">
+   211→          <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2" style={{ color: '#71717A' }} />
+   212→          <input type="email" className="input-field" style={{ paddingLeft: 42 }} placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
+   213→        </div>
+   214→        {fieldError('email')}
+   215→      </div>
+   216→      <div>
+   217→        <label className="block mb-1.5" style={{ fontSize: 12, fontWeight: 500, color: '#A1A1AA', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Phone Number <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 'normal' }}>(optional)</span></label>
+   218→        <div className="relative">
+   219→          <Phone size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2" style={{ color: '#71717A' }} />
+   220→          <input type="tel" className="input-field" style={{ paddingLeft: 42 }} placeholder="+1 (XXX) XXX-XXXX" value={phone} onChange={(e) => setPhone(e.target.value)} autoComplete="tel" />
+   221→        </div>
+   222→      </div>
+   223→      <div>
+   224→        <label className="block mb-1.5" style={{ fontSize: 12, fontWeight: 500, color: '#A1A1AA', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Password</label>
+   225→        <div className="relative">
+   226→          <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2" style={{ color: '#71717A' }} />
+   227→          <input type={showPassword ? 'text' : 'password'} className="input-field" style={{ paddingLeft: 42, paddingRight: 42 }} placeholder="Min 6 characters" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" />
+   228→          <button type="button" className="absolute right-3.5 top-1/2 -translate-y-1/2 bg-transparent border-none cursor-pointer" style={{ color: '#71717A' }} onClick={() => setShowPassword(!showPassword)}>{showPassword ? <EyeOff size={16} /> : <Eye size={16} />}</button>
+   229→        </div>
+   230→        {fieldError('password')}
+   231→      </div>
+   232→      <div>
+   233→        <label className="block mb-1.5" style={{ fontSize: 12, fontWeight: 500, color: '#A1A1AA', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Confirm Password</label>
+   234→        <div className="relative">
+   235→          <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2" style={{ color: '#71717A' }} />
+   236→          <input type={showConfirm ? 'text' : 'password'} className="input-field" style={{ paddingLeft: 42, paddingRight: 42 }} placeholder="Re-enter password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} autoComplete="new-password" />
+   237→          <button type="button" className="absolute right-3.5 top-1/2 -translate-y-1/2 bg-transparent border-none cursor-pointer" style={{ color: '#71717A' }} onClick={() => setShowConfirm(!showConfirm)}>{showConfirm ? <EyeOff size={16} /> : <Eye size={16} />}</button>
+   238→        </div>
+   239→        {fieldError('confirmPassword')}
+   240→      </div>
+   241→      <div>
+   242→        <label className="block mb-1.5" style={{ fontSize: 12, fontWeight: 500, color: '#A1A1AA', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Invitation Code <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 'normal' }}>(optional)</span></label>
+   243→        <div className="relative">
+   244→          <Ticket size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2" style={{ color: '#71717A' }} />
+   245→          <input type="text" className="input-field" style={{ paddingLeft: 42, textTransform: 'uppercase' }} placeholder="Have a code? Enter here" value={code} onChange={(e) => setCode(e.target.value)} autoComplete="off" />
+   246→        </div>
+   247→      </div>
+   248→      {error && (
+   249→        <motion.div initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} className="px-3 py-2.5 rounded-lg text-center" style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.15)', color: '#f87171', fontSize: 13 }}>{error}</motion.div>
+   250→      )}
+   251→      <motion.button type="submit" className="w-full flex items-center justify-center gap-2" style={{ padding: '14px 20px', fontSize: 15, fontWeight: 600, color: '#FAFAFA', border: 'none', borderRadius: 8, cursor: 'pointer', background: loading ? 'var(--bg-hover)' : 'var(--gradient-brand)', boxShadow: loading ? 'none' : 'var(--shadow-sm)', fontFamily: "var(--font-poppins), 'Poppins', sans-serif", marginTop: 4 }} disabled={loading}>
+   252→        {loading && <Loader2 size={18} className="animate-spin" />}
+   253→        {loading ? 'Creating Account...' : 'Create Account'}
+   254→      </motion.button>
+   255→      <p className="text-center mt-1" style={{ fontSize: 13, color: '#A1A1AA' }}>
+   256→        Already have an account?{' '}
+   257→        <button type="button" className="bg-transparent border-none cursor-pointer" style={{ color: '#3B82F6', fontWeight: 600, fontSize: 13 }} onClick={onSwitchToLogin}>Sign In</button>
+   258→      </p>
+   259→    </form>
+   260→  );
+   261→}
+   262→
+   263→/* ══════════════════════════════════════════════════════════════
+   264→   MAIN: SignIn Page (inner, uses useSearchParams)
+   265→   ══════════════════════════════════════════════════════════════ */
+   266→function SignInPageInner() {
+   267→  const router = useRouter();
+   268→  const searchParams = useSearchParams();
+   269→  const [mode, setMode] = useState<'login' | 'register'>(
+   270→    () => (searchParams.get('tab') as 'login' | 'register') || 'login'
+   271→  );
+   272→  const [time, setTime] = useState('');
+   273→  const [success, setSuccess] = useState(false);
+   274→
+   275→  useEffect(() => {
+   276→    const tick = () => setTime(new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+   277→    tick();
+   278→    const id = setInterval(tick, 1000);
+   279→    return () => clearInterval(id);
+   280→  }, []);
+   281→
+   282→  function handleAuthSuccess(user: any, token: string) {
+   283→    if (typeof window !== 'undefined') {
+   284→      localStorage.setItem('nextrade_token', token);
+   285→      localStorage.setItem('nextrade_user', JSON.stringify(user));
+   286→    }
+   287→    setSuccess(true);
+   288→    setTimeout(() => router.push('/'), 800);
+   289→  }
+   290→
+   291→  if (success) {
+   292→    return (
+   293→      <div className="min-h-screen flex items-center justify-center p-4 relative" style={{ background: '#09090B' }}>
+   294→        <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="text-center">
+   295→          <div className="inline-flex items-center justify-center rounded-full mb-4" style={{ width: 64, height: 64, background: 'rgba(34,197,94,0.1)' }}>
+   296→            <CheckCircle size={32} style={{ color: '#4ade80' }} />
+   297→          </div>
+   298→          <h2 style={{ fontSize: 22, fontWeight: 700, color: '#FAFAFA', fontFamily: "var(--font-poppins), 'Poppins', sans-serif" }}>
+   299→            {mode === 'register' ? 'Account Created!' : 'Welcome back!'}
+   300→          </h2>
+   301→          <p style={{ color: '#A1A1AA', fontSize: 14, marginTop: 8 }}>Redirecting to your dashboard...</p>
+   302→        </motion.div>
+   303→      </div>
+   304→    );
+   305→  }
+   306→
+   307→  const features = [
+   308→    { icon: Smartphone, label: 'One-Tap Pay', color: '#3B82F6' },
+   309→    { icon: Shield, label: 'Bank-Grade Security', color: '#4ade80' },
+   310→    { icon: Zap, label: 'Instant Transfer', color: '#F97316' },
+   311→    { icon: TrendingUp, label: 'Smart Analytics', color: '#FACC15' },
+   312→  ];
+   313→
+   314→  return (
+   315→    <div className="min-h-screen flex relative overflow-hidden" style={{ background: '#09090B' }}>
+   316→      {/* Left panel — branding (desktop only) */}
+   317→      <motion.div
+   318→        className="hidden lg:flex flex-col justify-between relative overflow-hidden"
+   319→        style={{ width: '45%', background: 'linear-gradient(160deg, #09090B 0%, #111113 40%, #09090B 100%)', borderRight: '1px solid var(--border-color)' }}
+   320→        initial={{ x: -60, opacity: 0 }}
+   321→        animate={{ x: 0, opacity: 1 }}
+   322→        transition={{ duration: 0.7, ease: 'easeOut' as const }}
+   323→      >
+   324→        <FloatingCards />
+   325→        <div className="absolute inset-0">
+   326→          <motion.div className="absolute rounded-full" style={{ width: 500, height: 500, top: '-15%', right: '-20%', background: 'radial-gradient(circle, rgba(59,130,246,0.06) 0%, transparent 60%)' }} animate={{ scale: [1, 1.2, 1], opacity: [0.5, 0.8, 0.5] }} transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut' }} />
+   327→        </div>
+   328→        <div className="absolute inset-0 opacity-[0.02]" style={{ backgroundImage: 'linear-gradient(rgba(161,161,170,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(161,161,170,0.3) 1px, transparent 1px)', backgroundSize: '80px 80px' }} />
+   329→
+   330→        {/* Top: Logo + time */}
+   331→        <div className="relative z-10 p-8 flex items-center justify-between">
+   332→          <div className="flex items-center gap-3">
+   333→            <Image src="/logo-admin.png" alt="NexTrade Pro" width={36} height={36} style={{ borderRadius: 8, objectFit: 'cover' }} />
+   334→            <span style={{ fontSize: 18, fontWeight: 700, color: '#FAFAFA', fontFamily: "var(--font-poppins), 'Poppins', sans-serif" }}>NexTrade Pro</span>
+   335→          </div>
+   336→          <span style={{ color: '#71717A', fontSize: 13, fontFamily: 'monospace' }}>{time}</span>
+   337→        </div>
+   338→
+   339→        {/* Center: Hero */}
+   340→        <div className="relative z-10 px-8 flex-1 flex flex-col justify-center">
+   341→          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3, duration: 0.6 }}>
+   342→            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full mb-6" style={{ background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.15)' }}>
+   343→              <div className="w-2 h-2 rounded-full" style={{ background: '#4ade80', animation: 'pulse-glow 2s infinite' }} />
+   344→              <span style={{ color: '#60A5FA', fontSize: 12, fontWeight: 600 }}>SECURE PAYMENTS</span>
+   345→            </div>
+   346→            <h1 style={{ fontSize: 40, fontWeight: 800, lineHeight: 1.15, color: '#FAFAFA', letterSpacing: '-0.03em', fontFamily: "var(--font-poppins), 'Poppins', sans-serif" }}>
+   347→              Digital Payments<br /><span className="gradient-text">Made Simple</span>
+   348→            </h1>
+   349→            <p style={{ color: '#A1A1AA', fontSize: 16, marginTop: 16, lineHeight: 1.6, maxWidth: 360 }}>
+   350→              Premium payment ecosystem with instant transfers, multi-gateway support, and institutional-grade security.
+   351→            </p>
+   352→          </motion.div>
+   353→          <motion.div className="flex flex-wrap gap-3 mt-8" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.6 }}>
+   354→            {features.map((f, i) => (
+   355→              <motion.div key={f.label} className="flex items-center gap-2 px-3 py-2 rounded-lg" style={{ background: 'rgba(24,24,27,0.6)', border: '1px solid var(--border-color)' }} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.7 + i * 0.1 }} whileHover={{ borderColor: 'rgba(63,63,70,0.8)', y: -2 }}>
+   356→                <f.icon size={14} style={{ color: f.color }} />
+   357→                <span style={{ fontSize: 12, color: '#A1A1AA', fontWeight: 500 }}>{f.label}</span>
+   358→              </motion.div>
+   359→            ))}
+   360→          </motion.div>
+   361→        </div>
+   362→
+   363→        {/* Bottom stats */}
+   364→        <motion.div className="relative z-10 px-8 pb-8 flex gap-6" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.8 }}>
+   365→          {[
+   366→            { label: 'Active Users', value: '150K+' },
+   367→            { label: 'Transactions', value: '$2.4B' },
+   368→            { label: 'Uptime', value: '99.99%' },
+   369→          ].map((s) => (
+   370→            <div key={s.label}>
+   371→              <div style={{ fontSize: 11, color: '#71717A', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{s.label}</div>
+   372→              <div style={{ fontSize: 18, fontWeight: 700, color: '#FAFAFA', marginTop: 2, fontFamily: "var(--font-poppins), 'Poppins', sans-serif" }}>{s.value}</div>
+   373→            </div>
+   374→          ))}
+   375→        </motion.div>
+   376→      </motion.div>
+   377→
+   378→      {/* Right panel — form */}
+   379→      <div className="flex-1 flex items-center justify-center p-4 relative" style={{ background: '#09090B' }}>
+   380→        <TickerTape />
+   381→
+   382→        {/* Mobile-only logo */}
+   383→        <motion.div className="lg:hidden absolute top-14 left-0 right-0 text-center z-10" initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
+   384→          <div className="inline-flex items-center gap-2">
+   385→            <Image src="/logo-admin.png" alt="NexTrade Pro" width={32} height={32} style={{ borderRadius: 8, objectFit: 'cover' }} />
+   386→            <span style={{ fontSize: 18, fontWeight: 700, color: '#FAFAFA', fontFamily: "var(--font-poppins), 'Poppins', sans-serif" }}>NexTrade Pro</span>
+   387→          </div>
+   388→        </motion.div>
+   389→
+   390→        <motion.div
+   391→          initial={{ opacity: 0, x: 30 }}
+   392→          animate={{ opacity: 1, x: 0 }}
+   393→          transition={{ duration: 0.5, ease: 'easeOut' as const, delay: 0.2 }}
+   394→          className="w-full relative z-10"
+   395→          style={{ maxWidth: 440 }}
+   396→        >
+   397→          <div className="lg:hidden" style={{ height: 80 }} />
+   398→
+   399→          {/* Back to home */}
+   400→          <button
+   401→            onClick={() => router.push('/')}
+   402→            className="flex items-center gap-1 mb-4 bg-transparent border-none cursor-pointer"
+   403→            style={{ color: '#71717A', fontSize: 13 }}
+   404→          >
+   405→            <ArrowLeft size={16} />
+   406→            Back to Home
+   407→          </button>
+   408→
+   409→          <div className="glass-card card-shine" style={{ padding: '36px 32px' }}>
+   410→            {/* Tab switcher */}
+   411→            <div className="mb-6">
+   412→              <div style={{ display: 'flex', background: 'var(--bg-hover)', borderRadius: 10, padding: 4, marginBottom: 16 }}>
+   413→                {(['login', 'register'] as const).map((tab) => (
+   414→                  <button
+   415→                    key={tab}
+   416→                    type="button"
+   417→                    onClick={() => setMode(tab)}
+   418→                    style={{
+   419→                      flex: 1,
+   420→                      padding: '10px 0',
+   421→                      borderRadius: 8,
+   422→                      border: 'none',
+   423→                      cursor: 'pointer',
+   424→                      fontSize: 14,
+   425→                      fontWeight: mode === tab ? 600 : 400,
+   426→                      color: mode === tab ? '#FAFAFA' : '#71717A',
+   427→                      background: mode === tab ? 'rgba(59,130,246,0.15)' : 'transparent',
+   428→                      transition: 'all 0.2s',
+   429→                      fontFamily: "var(--font-poppins), 'Poppins', sans-serif",
+   430→                    }}
+   431→                  >
+   432→                    {tab === 'login' ? 'Sign In' : 'Create Account'}
+   433→                  </button>
+   434→                ))}
+   435→              </div>
+   436→              <div>
+   437→                <h2 style={{ fontSize: 26, fontWeight: 800, color: '#FAFAFA', fontFamily: "var(--font-poppins), 'Poppins', sans-serif" }}>
+   438→                  {mode === 'login' ? 'Welcome back' : 'Get started'}
+   439→                </h2>
+   440→                <p style={{ color: '#71717A', fontSize: 14, marginTop: 6 }}>
+   441→                  {mode === 'login' ? 'Sign in to your account' : 'Create your NexTrade Pro account'}
+   442→                </p>
+   443→              </div>
+   444→            </div>
+   445→
+   446→            <AnimatePresence mode="wait">
+   447→              {mode === 'login' ? (
+   448→                <motion.div key="login" initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10 }} transition={{ duration: 0.2 }}>
+   449→                  <LoginForm onSwitchToRegister={() => setMode('register')} onLoginSuccess={handleAuthSuccess} />
+   450→                </motion.div>
+   451→              ) : (
+   452→                <motion.div key="register" initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} transition={{ duration: 0.2 }}>
+   453→                  <RegisterForm onSwitchToLogin={() => setMode('login')} onRegisterSuccess={handleAuthSuccess} />
+   454→                </motion.div>
+   455→              )}
+   456→            </AnimatePresence>
+   457→          </div>
+   458→
+   459→          <motion.p className="text-center mt-6" style={{ fontSize: 11, color: '#71717A' }} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1 }}>
+   460→            Secured with 256-bit encryption. All rights reserved.
+   461→          </motion.p>
+   462→        </motion.div>
+   463→      </div>
+   464→    </div>
+   465→  );
+   466→}
+   467→
+   468→/* ─── Export with Suspense wrapper for useSearchParams ─── */
+   469→export default function SignInPage() {
+   470→  return (
+   471→    <Suspense fallback={
+   472→      <div className="min-h-screen flex items-center justify-center" style={{ background: '#09090B' }}>
+   473→        <div className="animate-spin" style={{ width: 32, height: 32, border: '3px solid var(--border-color)', borderTopColor: '#3B82F6', borderRadius: '50%' }} />
+   474→      </div>
+   475→    }>
+   476→      <SignInPageInner />
+   477→    </Suspense>
+   478→  );
+   479→}

@@ -25,6 +25,7 @@ import {
 import Image from 'next/image';
 
 const adminNav = [
+  { icon: <LayoutDashboard size={20} />, label: 'Dashboard', path: '/admin' },
   { icon: <Users size={20} />, label: 'Users', path: '/admin/users' },
   { icon: <UserCog size={20} />, label: 'Agents', path: '/admin/agents' },
   { icon: <ArrowLeftRight size={20} />, label: 'Trades', path: '/admin/trades' },
@@ -61,6 +62,8 @@ function AdminSidebar({ open, onClose }: { open: boolean; onClose: () => void })
 
   function handleLogout() {
     if (typeof window !== 'undefined') {
+      localStorage.removeItem('brock_token');
+      localStorage.removeItem('brock_user');
       localStorage.removeItem('nextrade_token');
       localStorage.removeItem('nextrade_user');
       window.location.href = '/';
@@ -83,11 +86,11 @@ function AdminSidebar({ open, onClose }: { open: boolean; onClose: () => void })
       >
         <div
           className="flex items-center gap-3 px-4 py-5 border-b"
-          style={{ borderColor: 'rgba(192, 199, 209, 0.1)' }}
+          style={{ borderColor: 'var(--border-color)' }}
         >
           <Image
             src="/logo-admin.png"
-            alt="NexTrade Pro"
+            alt="Brock Exchange"
             width={36}
             height={36}
             style={{ borderRadius: 8, objectFit: 'cover', flexShrink: 0 }}
@@ -101,8 +104,8 @@ function AdminSidebar({ open, onClose }: { open: boolean; onClose: () => void })
                 transition={{ duration: 0.2 }}
                 style={{ overflow: 'hidden', whiteSpace: 'nowrap' }}
               >
-                <span style={{ fontSize: 18, fontWeight: 700, color: '#FFFFFF', fontFamily: "var(--font-poppins), 'Poppins', sans-serif" }}>
-                  NexTrade <span style={{ color: '#FFD700' }}>Pro</span>
+                <span style={{ fontSize: 18, fontWeight: 700, color: '#FFFFFF' }}>
+                  Brock <span style={{ color: 'var(--accent-gold)' }}>Exchange</span>
                 </span>
               </motion.div>
             )}
@@ -122,7 +125,7 @@ function AdminSidebar({ open, onClose }: { open: boolean; onClose: () => void })
                   fontWeight: 600,
                   textTransform: 'uppercase',
                   letterSpacing: '0.08em',
-                  color: '#7A8599',
+                  color: 'var(--text-muted)',
                 }}
               >
                 Admin Panel
@@ -148,7 +151,7 @@ function AdminSidebar({ open, onClose }: { open: boolean; onClose: () => void })
                   cursor: 'pointer',
                 }}
               >
-                <span style={{ flexShrink: 0, color: isActive ? '#FFD700' : undefined }}>{item.icon}</span>
+                <span style={{ flexShrink: 0, color: isActive ? 'var(--accent-gold)' : undefined }}>{item.icon}</span>
                 <AnimatePresence>
                   {open && (
                     <motion.span
@@ -167,7 +170,7 @@ function AdminSidebar({ open, onClose }: { open: boolean; onClose: () => void })
           })}
         </nav>
 
-        <div className="border-t" style={{ borderColor: 'rgba(192, 199, 209, 0.1)' }}>
+        <div className="border-t" style={{ borderColor: 'var(--border-color)' }}>
           <div
             className="sidebar-item"
             onClick={() => router.push('/')}
@@ -199,7 +202,7 @@ function AdminSidebar({ open, onClose }: { open: boolean; onClose: () => void })
             onClick={handleLogout}
             style={{
               justifyContent: open ? 'flex-start' : 'center',
-              color: '#FF4757',
+              color: 'var(--accent-red)',
               padding: open ? '10px 16px' : '10px 0',
               margin: open ? '0 8px 8px' : '0 0 8px',
               cursor: 'pointer',
@@ -226,20 +229,14 @@ function AdminSidebar({ open, onClose }: { open: boolean; onClose: () => void })
   );
 }
 
-function AdminHeader({
-  open,
-  onToggle,
-}: {
-  open: boolean;
-  onToggle: () => void;
-}) {
+function AdminHeader({ open, onToggle }: { open: boolean; onToggle: () => void }) {
   const pathname = usePathname();
   const router = useRouter();
 
   const [user, setUser] = useState<any>(null);
   useEffect(() => {
     try {
-      const u = localStorage.getItem('nextrade_user');
+      const u = localStorage.getItem('brock_user') || localStorage.getItem('nextrade_user');
       if (u) setUser(JSON.parse(u));
     } catch {}
   }, []);
@@ -248,20 +245,15 @@ function AdminHeader({
 
   return (
     <header
-      className="flex items-center justify-between px-6 h-16 border-b"
-      style={{
-        background: 'rgba(10, 15, 26, 0.95)',
-        backdropFilter: 'blur(12px)',
-        borderColor: 'rgba(192, 199, 209, 0.1)',
-        flexShrink: 0,
-      }}
+      className="navbar flex items-center justify-between px-6"
+      style={{ flexShrink: 0 }}
     >
       <div className="flex items-center gap-4">
         <button
           onClick={onToggle}
           className="p-2 rounded-lg transition-colors cursor-pointer"
-          style={{ color: '#C0C7D1' }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(229,57,53,0.08)')}
+          style={{ color: 'var(--text-secondary)' }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-hover)')}
           onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
         >
           <Menu size={20} />
@@ -276,11 +268,11 @@ function AdminHeader({
           onClick={() => router.push('/')}
           className="flex items-center gap-2 px-3 py-1.5 rounded-lg transition-colors cursor-pointer"
           style={{
-            color: '#C0C7D1',
+            color: 'var(--text-secondary)',
             fontSize: 13,
-            border: '1px solid rgba(192,199,209,0.12)',
+            border: '1px solid var(--border-color)',
           }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(229,57,53,0.08)')}
+          onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-hover)')}
           onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
         >
           <Home size={14} />
@@ -293,10 +285,9 @@ function AdminHeader({
             style={{
               width: 32,
               height: 32,
-              background: 'rgba(229, 57, 53, 0.15)',
-              border: '1px solid rgba(229, 57, 53, 0.3)',
+              background: 'var(--gradient)',
               fontSize: 13,
-              color: '#FFD700',
+              color: '#07090f',
               flexShrink: 0,
             }}
           >
@@ -324,8 +315,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   useEffect(() => {
     try {
-      const token = localStorage.getItem('nextrade_token');
-      const userStr = localStorage.getItem('nextrade_user');
+      const token = localStorage.getItem('brock_token') || localStorage.getItem('nextrade_token');
+      const userStr = localStorage.getItem('brock_user') || localStorage.getItem('nextrade_user');
       if (!token || !userStr) {
         router.replace('/');
         return;
@@ -345,8 +336,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   if (checking) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: '#0A0F1A' }}>
-        <div className="animate-spin" style={{ width: 32, height: 32, border: '3px solid rgba(192,199,209,0.12)', borderTopColor: '#E53935', borderRadius: '50%' }} />
+      <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--bg-primary)' }}>
+        <div className="animate-spin" style={{ width: 32, height: 32, border: '3px solid var(--border-color)', borderTopColor: 'var(--accent-gold)', borderRadius: '50%' }} />
       </div>
     );
   }
@@ -354,7 +345,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   if (!authorized) return null;
 
   return (
-    <div className="relative flex h-screen overflow-hidden" style={{ background: '#0A0F1A' }}>
+    <div className="relative flex h-screen overflow-hidden" style={{ background: 'var(--bg-primary)' }}>
       {/* Background image with dark overlay */}
       <div
         className="absolute inset-0 z-0"
@@ -369,7 +360,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       <div
         className="absolute inset-0 z-0"
         style={{
-          background: 'linear-gradient(135deg, rgba(10,15,26,0.92), rgba(6,15,35,0.88))',
+          background: 'linear-gradient(135deg, rgba(7,9,15,0.95), rgba(16,20,29,0.92))',
         }}
       />
 

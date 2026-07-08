@@ -111,7 +111,7 @@ function LeftPanel() {
         className="absolute inset-0"
         style={{
           background:
-            'linear-gradient(180deg, rgba(10,15,26,0.92), rgba(10,15,26,0.75), rgba(10,15,26,0.92))',
+            'linear-gradient(180deg, rgba(7,9,15,0.95), rgba(7,9,15,0.75), rgba(7,9,15,0.95))',
         }}
       />
 
@@ -119,9 +119,9 @@ function LeftPanel() {
       <div className="relative z-10 flex flex-col justify-between p-10">
         {/* top: logo */}
         <div className="flex items-center gap-2.5">
-          <Image src="/logo.png" alt="NexTrade Pro" width={36} height={36} />
+          <Image src="/logo.png" alt="Brock Exchange" width={36} height={36} />
           <span className="text-lg font-semibold tracking-tight text-white">
-            NexTrade <span className="text-[#FFD700]">Pro</span>
+            Brock <span style={{ color: 'var(--accent-gold)' }}>Exchange</span>
           </span>
         </div>
 
@@ -338,8 +338,8 @@ function SignInContent() {
         setError(data.error || 'Login failed');
         return;
       }
-      localStorage.setItem('nextrade_token', data.token);
-      localStorage.setItem('nextrade_user', JSON.stringify(data.user));
+      localStorage.setItem('brock_token', data.token);
+      localStorage.setItem('brock_user', JSON.stringify(data.user));
       router.push('/');
     } catch (_err) {
       setError('Network error. Please check your connection.');
@@ -371,8 +371,8 @@ function SignInContent() {
         setError(data.error || 'Registration failed');
         return;
       }
-      localStorage.setItem('nextrade_token', data.token);
-      localStorage.setItem('nextrade_user', JSON.stringify(data.user));
+      localStorage.setItem('brock_token', data.token);
+      localStorage.setItem('brock_user', JSON.stringify(data.user));
       router.push('/');
     } catch (_err) {
       setError('Network error. Please check your connection.');
@@ -387,7 +387,7 @@ function SignInContent() {
   };
 
   return (
-    <div className="relative flex min-h-screen bg-[#0A0F1A]">
+    <div className="relative flex min-h-screen" style={{ background: 'var(--bg-primary)' }}>
       <FloatingOrbs />
 
       {/* ─── left panel (desktop) ─── */}
@@ -400,9 +400,9 @@ function SignInContent() {
 
         {/* mobile logo + back */}
         <div className="flex items-center gap-2.5 px-6 pt-6 lg:hidden">
-          <Image src="/logo.png" alt="NexTrade Pro" width={32} height={32} />
+          <Image src="/logo.png" alt="Brock Exchange" width={32} height={32} />
           <span className="text-base font-semibold tracking-tight text-white">
-            NexTrade <span className="text-[#FFD700]">Pro</span>
+            Brock <span style={{ color: 'var(--accent-gold)' }}>Exchange</span>
           </span>
         </div>
 
@@ -436,7 +436,7 @@ function SignInContent() {
               {/* mobile heading */}
               <div className="mb-6 text-center lg:hidden">
                 <h1 className="text-2xl font-bold text-white">Welcome</h1>
-                <p className="mt-1 text-sm text-[#7A8599]">Sign in to NexTrade Pro</p>
+                <p className="mt-1 text-sm" style={{ color: 'var(--text-muted)' }}>Sign in to Brock Exchange</p>
               </div>
 
               {/* tab switcher */}

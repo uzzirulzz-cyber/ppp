@@ -9,16 +9,23 @@ import HomePage from '@/components/pages/HomePage';
 import LoginPage from '@/components/pages/LoginPage';
 import RegisterPage from '@/components/pages/RegisterPage';
 import DashboardPage from '@/components/pages/DashboardPage';
+import MarketsPage from '@/components/pages/MarketsPage';
+import WatchlistPage from '@/components/pages/WatchlistPage';
 import TradingPage from '@/components/pages/TradingPage';
 import WalletPage from '@/components/pages/WalletPage';
+import AssetsPage from '@/components/pages/AssetsPage';
+import HistoryPage from '@/components/pages/HistoryPage';
 import ProfilePage from '@/components/pages/ProfilePage';
 import NotificationsPage from '@/components/pages/NotificationsPage';
 import LockScreenPage from '@/components/pages/LockScreenPage';
 import ReferralPage from '@/components/pages/ReferralPage';
+import SettingsPage from '@/components/pages/SettingsPage';
+import ChangePasswordPage from '@/components/pages/auth/ChangePasswordPage';
 import UserManagementPage from '@/components/pages/admin/UserManagementPage';
 import AgentManagementPage from '@/components/pages/admin/AgentManagementPage';
 import TradeMonitoringPage from '@/components/pages/admin/TradeMonitoringPage';
 import WalletManagementPage from '@/components/pages/admin/WalletManagementPage';
+import WithdrawalManagementPage from '@/components/pages/admin/WithdrawalManagementPage';
 import RevenueAnalyticsPage from '@/components/pages/admin/RevenueAnalyticsPage';
 import CommissionSettingsPage from '@/components/pages/admin/CommissionSettingsPage';
 import RiskManagementPage from '@/components/pages/admin/RiskManagementPage';
@@ -31,24 +38,38 @@ function PageRouter() {
   const { currentPage } = useStore();
 
   switch (currentPage) {
+    // Unauthenticated
+    case Pages.HOME: return <HomePage />;
+    case Pages.LOGIN: return <LoginPage />;
+    case Pages.REGISTER: return <RegisterPage />;
+    // Authenticated user
     case Pages.DASHBOARD: return <DashboardPage />;
+    case Pages.MARKETS: return <MarketsPage />;
+    case Pages.WATCHLIST: return <WatchlistPage />;
     case Pages.TRADING: return <TradingPage />;
     case Pages.SPOT: return <TradingPage />;
     case Pages.FUTURES: return <TradingPage />;
     case Pages.WALLET: return <WalletPage />;
+    case Pages.ASSETS: return <AssetsPage />;
     case Pages.DEPOSIT: return <WalletPage />;
     case Pages.WITHDRAW: return <WalletPage />;
     case Pages.EARN: return <WalletPage />;
     case Pages.TRANSACTIONS: return <WalletPage />;
+    case Pages.HISTORY: return <HistoryPage />;
     case Pages.PROFILE: return <ProfilePage />;
     case Pages.SECURITY: return <ProfilePage />;
     case Pages.NOTIFICATIONS: return <NotificationsPage />;
+    case Pages.SETTINGS: return <SettingsPage />;
     case Pages.REFERRAL: return <ReferralPage />;
     case Pages.LOCK_SCREEN: return <LockScreenPage />;
+    case Pages.CHANGE_PASSWORD: return <ChangePasswordPage />;
+    // Admin
+    case Pages.ADMIN_DASHBOARD: return <RevenueAnalyticsPage />;
     case Pages.ADMIN_USERS: return <UserManagementPage />;
     case Pages.ADMIN_AGENTS: return <AgentManagementPage />;
     case Pages.ADMIN_TRADES: return <TradeMonitoringPage />;
     case Pages.ADMIN_WALLETS: return <WalletManagementPage />;
+    case Pages.ADMIN_WITHDRAWALS: return <WithdrawalManagementPage />;
     case Pages.ADMIN_ANALYTICS: return <RevenueAnalyticsPage />;
     case Pages.ADMIN_COMMISSIONS: return <CommissionSettingsPage />;
     case Pages.ADMIN_RISK: return <RiskManagementPage />;
@@ -61,41 +82,41 @@ function PageRouter() {
 }
 
 export default function Home() {
-  const { isAuthenticated, currentPage } = useStore();
+  const { isAuthenticated, currentPage, user } = useStore();
 
-  // Re-hydrate auth from localStorage on every mount
-  // This handles the case where the user logs in via /signin (standalone page)
-  // and gets redirected back to / — the store module-level hydration only runs once,
-  // so we need this effect to pick up localStorage changes from other routes.
+  // Re-hydrate auth from localStorage
   useEffect(() => {
     try {
-      const token = localStorage.getItem('nextrade_token');
-      const userStr = localStorage.getItem('nextrade_user');
+      const token = localStorage.getItem('brock_token') || localStorage.getItem('nextrade_token');
+      const userStr = localStorage.getItem('brock_user') || localStorage.getItem('nextrade_user');
       if (token && userStr) {
-        const user = JSON.parse(userStr);
+        const u = JSON.parse(userStr);
         const store = useStore.getState();
         if (!store.isAuthenticated) {
-          const isAdmin = user.role === 'SUPER_ADMIN' || user.role === 'SUB_AGENT';
+          const isAdmin = u.role === 'SUPER_ADMIN' || u.role === 'SUB_AGENT';
           useStore.setState({
-            user,
+            user: u,
             token,
             isAuthenticated: true,
-            currentPage: isAdmin ? Pages.ADMIN_USERS : Pages.DASHBOARD,
-            pageHistory: [isAdmin ? Pages.ADMIN_USERS : Pages.DASHBOARD],
+            currentPage: isAdmin ? Pages.ADMIN_DASHBOARD : Pages.DASHBOARD,
+            pageHistory: [isAdmin ? Pages.ADMIN_DASHBOARD : Pages.DASHBOARD],
           });
         }
       }
     } catch {}
   }, []);
 
-  /* Unauthenticated users: route to login, register, or landing page */
+  // Must change password redirect
+  useEffect(() => {
+    if (isAuthenticated && user?.mustChangePassword && currentPage !== Pages.CHANGE_PASSWORD && currentPage !== Pages.LOCK_SCREEN) {
+      useStore.getState().navigate(Pages.CHANGE_PASSWORD);
+    }
+  }, [isAuthenticated, user?.mustChangePassword, currentPage]);
+
+  /* Unauthenticated */
   if (!isAuthenticated) {
-    if (currentPage === Pages.REGISTER) {
-      return <RegisterPage />;
-    }
-    if (currentPage === Pages.LOGIN) {
-      return <LoginPage />;
-    }
+    if (currentPage === Pages.REGISTER) return <RegisterPage />;
+    if (currentPage === Pages.LOGIN) return <LoginPage />;
     return <HomePage />;
   }
 

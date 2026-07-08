@@ -1,28 +1,37 @@
 import { create } from 'zustand';
 
-// Page type constants (31 pages)
+// Page type constants
 export const Pages = {
   LOGIN: 'LOGIN',
   REGISTER: 'REGISTER',
+  HOME: 'HOME',
   DASHBOARD: 'DASHBOARD',
+  MARKETS: 'MARKETS',
+  WATCHLIST: 'WATCHLIST',
   TRADING: 'TRADING',
   SPOT: 'SPOT',
   FUTURES: 'FUTURES',
   WALLET: 'WALLET',
+  ASSETS: 'ASSETS',
   DEPOSIT: 'DEPOSIT',
   WITHDRAW: 'WITHDRAW',
   EARN: 'EARN',
   TRANSACTIONS: 'TRANSACTIONS',
+  HISTORY: 'HISTORY',
   PROFILE: 'PROFILE',
   SECURITY: 'SECURITY',
   NOTIFICATIONS: 'NOTIFICATIONS',
+  SETTINGS: 'SETTINGS',
   REFERRAL: 'REFERRAL',
   LOCK_SCREEN: 'LOCK_SCREEN',
+  CHANGE_PASSWORD: 'CHANGE_PASSWORD',
   // Admin pages
+  ADMIN_DASHBOARD: 'ADMIN_DASHBOARD',
   ADMIN_USERS: 'ADMIN_USERS',
   ADMIN_AGENTS: 'ADMIN_AGENTS',
   ADMIN_TRADES: 'ADMIN_TRADES',
   ADMIN_WALLETS: 'ADMIN_WALLETS',
+  ADMIN_WITHDRAWALS: 'ADMIN_WITHDRAWALS',
   ADMIN_ANALYTICS: 'ADMIN_ANALYTICS',
   ADMIN_COMMISSIONS: 'ADMIN_COMMISSIONS',
   ADMIN_RISK: 'ADMIN_RISK',
@@ -43,6 +52,8 @@ export interface UserInfo {
   avatar?: string;
   phone?: string;
   agentId?: string;
+  mustChangePassword?: boolean;
+  invitationCode?: string;
   lastLogin?: string;
   createdAt?: string;
 }
@@ -53,10 +64,11 @@ interface StoreState {
   user: UserInfo | null;
   token: string | null;
   isAuthenticated: boolean;
-  notifications: any[];
+  notifications: Record<string, unknown>[];
   unreadCount: number;
   sidebarOpen: boolean;
   loading: boolean;
+  selectedCoin?: string;
   
   // Actions
   navigate: (page: PageType) => void;
@@ -67,14 +79,15 @@ interface StoreState {
   setUnreadCount: (count: number) => void;
   toggleSidebar: () => void;
   setLoading: (loading: boolean) => void;
+  setSelectedCoin: (coin: string) => void;
 }
 
-const TOKEN_KEY = 'nextrade_token';
-const USER_KEY = 'nextrade_user';
+const TOKEN_KEY = 'brock_token';
+const USER_KEY = 'brock_user';
 
 export const useStore = create<StoreState>((set, get) => ({
-  currentPage: Pages.LOGIN,
-  pageHistory: [Pages.LOGIN],
+  currentPage: Pages.HOME,
+  pageHistory: [Pages.HOME],
   user: null,
   token: null,
   isAuthenticated: false,
@@ -110,8 +123,8 @@ export const useStore = create<StoreState>((set, get) => ({
       user,
       token,
       isAuthenticated: true,
-      currentPage: isAdmin ? Pages.ADMIN_USERS : Pages.DASHBOARD,
-      pageHistory: [isAdmin ? Pages.ADMIN_USERS : Pages.DASHBOARD],
+      currentPage: isAdmin ? Pages.ADMIN_DASHBOARD : Pages.DASHBOARD,
+      pageHistory: [isAdmin ? Pages.ADMIN_DASHBOARD : Pages.DASHBOARD],
     });
   },
 
@@ -124,8 +137,8 @@ export const useStore = create<StoreState>((set, get) => ({
       user: null,
       token: null,
       isAuthenticated: false,
-      currentPage: Pages.LOGIN,
-      pageHistory: [Pages.LOGIN],
+      currentPage: Pages.HOME,
+      pageHistory: [Pages.HOME],
       notifications: [],
       unreadCount: 0,
     });
@@ -141,21 +154,33 @@ export const useStore = create<StoreState>((set, get) => ({
   toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
 
   setLoading: (loading) => set({ loading }),
+
+  setSelectedCoin: (coin) => set({ selectedCoin: coin }),
 }));
 
-// Hydrate from localStorage
+// Hydrate from localStorage (check both old and new keys for migration)
 if (typeof window !== 'undefined') {
-  const token = localStorage.getItem(TOKEN_KEY);
-  const userStr = localStorage.getItem(USER_KEY);
+  const token = localStorage.getItem(TOKEN_KEY) || localStorage.getItem('nextrade_token');
+  const userStr = localStorage.getItem(USER_KEY) || localStorage.getItem('nextrade_user');
   if (token && userStr) {
+    // Migrate old keys to new keys
+    if (localStorage.getItem('nextrade_token')) {
+      localStorage.setItem(TOKEN_KEY, token);
+      localStorage.removeItem('nextrade_token');
+    }
+    if (localStorage.getItem('nextrade_user')) {
+      localStorage.setItem(USER_KEY, userStr);
+      localStorage.removeItem('nextrade_user');
+    }
     try {
       const user = JSON.parse(userStr);
+      const isAdmin = user.role === 'SUPER_ADMIN' || user.role === 'SUB_AGENT';
       useStore.setState({
         user,
         token,
         isAuthenticated: true,
-        currentPage: (user.role === 'SUPER_ADMIN' || user.role === 'SUB_AGENT') ? Pages.ADMIN_USERS : Pages.DASHBOARD,
-        pageHistory: [(user.role === 'SUPER_ADMIN' || user.role === 'SUB_AGENT') ? Pages.ADMIN_USERS : Pages.DASHBOARD],
+        currentPage: isAdmin ? Pages.ADMIN_DASHBOARD : Pages.DASHBOARD,
+        pageHistory: [isAdmin ? Pages.ADMIN_DASHBOARD : Pages.DASHBOARD],
       });
     } catch {}
   }

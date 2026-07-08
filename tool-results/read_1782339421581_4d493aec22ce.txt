@@ -1,0 +1,1264 @@
+     1→     1→'use client';
+     2→     2→
+     3→     3→import React, { useState, useEffect, useCallback } from 'react';
+     4→     4→import { motion, AnimatePresence } from 'framer-motion';
+     5→     5→import {
+     6→     6→  Wallet,
+     7→     7→  ArrowDownLeft,
+     8→     8→  ArrowUpRight,
+     9→     9→  ArrowLeftRight,
+    10→    10→  Bitcoin,
+    11→    11→  CircleDollarSign,
+    12→    12→  X,
+    13→    13→  Loader2,
+    14→    14→  CheckCircle,
+    15→    15→  AlertCircle,
+    16→    16→  ChevronDown,
+    17→    17→  ChevronUp,
+    18→    18→} from 'lucide-react';
+    19→    19→import { useStore, Pages } from '@/store/useStore';
+    20→    20→
+    21→    21→/* ─── Types ─── */
+    22→    22→
+    23→    23→interface BalanceItem {
+    24→    24→  currency: string;
+    25→    25→  amount: number;
+    26→    26→  frozen: number;
+    27→    27→}
+    28→    28→
+    29→    29→interface WalletData {
+    30→    30→  balances: BalanceItem[];
+    31→    31→  totalEquity: number;
+    32→    32→  _id: string;
+    33→    33→}
+    34→    34→
+    35→    35→interface Transaction {
+    36→    36→  _id: string;
+    37→    37→  type: string;
+    38→    38→  currency: string;
+    39→    39→  amount: number;
+    40→    40→  status: string;
+    41→    41→  createdAt: string;
+    42→    42→  txId?: string;
+    43→    43→  description?: string;
+    44→    44→  method?: string;
+    45→    45→}
+    46→    46→
+    47→    47→interface Pagination {
+    48→    48→  page: number;
+    49→    49→  limit: number;
+    50→    50→  total: number;
+    51→    51→  totalPages: number;
+    52→    52→}
+    53→    53→
+    54→    54→type PaymentMethod = 'JazzCash' | 'Easypaisa' | 'Bank Transfer' | 'Visa' | 'Mastercard';
+    55→    55→
+    56→    56→/* ─── Helpers ─── */
+    57→    57→
+    58→    58→function getToken(): string | null {
+    59→    59→  if (typeof window === 'undefined') return null;
+    60→    60→  return localStorage.getItem('nextrade_token');
+    61→    61→}
+    62→    62→
+    63→    63→function formatCurrency(amount: number, currency: string = ''): string {
+    64→    64→  const formatted = amount.toLocaleString('en-US', {
+    65→    65→    minimumFractionDigits: 2,
+    66→    66→    maximumFractionDigits: 2,
+    67→    67→  });
+    68→    68→  return currency ? `${formatted} ${currency}` : formatted;
+    69→    69→}
+    70→    70→
+    71→    71→function formatDate(dateStr: string): string {
+    72→    72→  try {
+    73→    73→    const d = new Date(dateStr);
+    74→    74→    return d.toLocaleDateString('en-US', {
+    75→    75→      month: 'short',
+    76→    76→      day: 'numeric',
+    77→    77→      hour: '2-digit',
+    78→    78→      minute: '2-digit',
+    79→    79→      hour12: false,
+    80→    80→    });
+    81→    81→  } catch {
+    82→    82→    return dateStr;
+    83→    83→  }
+    84→    84→}
+    85→    85→
+    86→    86→function getStatusBadge(status: string): string {
+    87→    87→  const s = status?.toLowerCase() ?? '';
+    88→    88→  if (s === 'completed' || s === 'approved' || s === 'confirmed') return 'badge-green';
+    89→    89→  if (s === 'pending' || s === 'processing' || s === 'reviewing') return 'badge-amber';
+    90→    90→  if (s === 'failed' || s === 'rejected' || s === 'cancelled') return 'badge-red';
+    91→    91→  return 'badge-blue';
+    92→    92→}
+    93→    93→
+    94→    94→function getCurrencyIcon(currency: string, size: number = 22) {
+    95→    95→  const upper = currency?.toUpperCase() ?? '';
+    96→    96→  if (upper === 'BTC') {
+    97→    97→    return <Bitcoin size={size} style={{ color: '#f59e0b' }} />;
+    98→    98→  }
+    99→    99→  if (upper === 'USDT' || upper === 'USD' || upper === 'PKR') {
+   100→   100→    return <CircleDollarSign size={size} style={{ color: '#22c55e' }} />;
+   101→   101→  }
+   102→   102→  return (
+   103→   103→    <div
+   104→   104→      style={{
+   105→   105→        width: size,
+   106→   106→        height: size,
+   107→   107→        borderRadius: '50%',
+   108→   108→        background: 'rgba(59, 130, 246, 0.15)',
+   109→   109→        display: 'flex',
+   110→   110→        alignItems: 'center',
+   111→   111→        justifyContent: 'center',
+   112→   112→        fontSize: 11,
+   113→   113→        fontWeight: 700,
+   114→   114→        color: 'var(--accent-blue)',
+   115→   115→      }}
+   116→   116→    >
+   117→   117→      {upper.slice(0, 2)}
+   118→   118→    </div>
+   119→   119→  );
+   120→   120→}
+   121→   121→
+   122→   122→function getCurrencyColor(currency: string): string {
+   123→   123→  const upper = currency?.toUpperCase() ?? '';
+   124→   124→  if (upper === 'BTC') return 'rgba(245, 158, 11, 0.15)';
+   125→   125→  if (upper === 'ETH') return 'rgba(99, 102, 241, 0.15)';
+   126→   126→  if (upper === 'USDT' || upper === 'USD') return 'rgba(34, 197, 94, 0.15)';
+   127→   127→  if (upper === 'PKR') return 'rgba(59, 130, 246, 0.15)';
+   128→   128→  return 'rgba(161, 161, 170, 0.15)';
+   129→   129→}
+   130→   130→
+   131→   131→/* ─── Skeleton Pulse ─── */
+   132→   132→
+   133→   133→function Skeleton({ width, height, style }: { width?: string; height?: string; style?: React.CSSProperties }) {
+   134→   134→  return (
+   135→   135→    <div
+   136→   136→      style={{
+   137→   137→        width: width ?? '100%',
+   138→   138→        height: height ?? '16px',
+   139→   139→        borderRadius: 6,
+   140→   140→        background: 'linear-gradient(90deg, var(--bg-hover-subtle) 25%, var(--bg-hover) 50%, var(--bg-hover-subtle) 75%)',
+   141→   141→        backgroundSize: '200% 100%',
+   142→   142→        animation: 'shimmer 1.5s infinite',
+   143→   143→        ...style,
+   144→   144→      }}
+   145→   145→    />
+   146→   146→  );
+   147→   147→}
+   148→   148→
+   149→   149→/* ─── Withdraw Modal ─── */
+   150→   150→
+   151→   151→const PAYMENT_METHODS: { value: PaymentMethod; label: string; icon: string }[] = [
+   152→   152→  { value: 'JazzCash', label: 'JazzCash', icon: '📱' },
+   153→   153→  { value: 'Easypaisa', label: 'Easypaisa', icon: '💚' },
+   154→   154→  { value: 'Bank Transfer', label: 'Bank Transfer', icon: '🏦' },
+   155→   155→  { value: 'Visa', label: 'Visa', icon: '💳' },
+   156→   156→  { value: 'Mastercard', label: 'Mastercard', icon: '💳' },
+   157→   157→];
+   158→   158→
+   159→   159→const FEE_RATE = 0.02;
+   160→   160→
+   161→   161→function WithdrawModal({
+   162→   162→  balances,
+   163→   163→  onClose,
+   164→   164→  onSuccess,
+   165→   165→}: {
+   166→   166→  balances: BalanceItem[];
+   167→   167→  onClose: () => void;
+   168→   168→  onSuccess: () => void;
+   169→   169→}) {
+   170→   170→  const [selectedCurrency, setSelectedCurrency] = useState(() =>
+   171→   171→    balances.length > 0 ? balances[0].currency : ''
+   172→   172→  );
+   173→   173→  const [amount, setAmount] = useState('');
+   174→   174→  const [method, setMethod] = useState<PaymentMethod | ''>('');
+   175→   175→  const [accountNumber, setAccountNumber] = useState('');
+   176→   176→  const [accountName, setAccountName] = useState('');
+   177→   177→  const [isSubmitting, setIsSubmitting] = useState(false);
+   178→   178→  const [submitMessage, setSubmitMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+   179→   179→  const [currencyDropdownOpen, setCurrencyDropdownOpen] = useState(false);
+   180→   180→
+   181→   181→  const availableBalance = balances.find((b) => b.currency === selectedCurrency)?.amount ?? 0;
+   182→   182→  const numericAmount = parseFloat(amount) || 0;
+   183→   183→  const fee = numericAmount * FEE_RATE;
+   184→   184→  const netAmount = numericAmount - fee;
+   185→   185→
+   186→   186→  function canSubmit(): boolean {
+   187→   187→    return (
+   188→   188→      selectedCurrency !== '' &&
+   189→   189→      numericAmount > 0 &&
+   190→   190→      numericAmount <= availableBalance &&
+   191→   191→      method !== '' &&
+   192→   192→      accountNumber.trim().length > 0 &&
+   193→   193→      accountName.trim().length > 0 &&
+   194→   194→      !isSubmitting
+   195→   195→    );
+   196→   196→  }
+   197→   197→
+   198→   198→  async function handleSubmit() {
+   199→   199→    if (!canSubmit()) return;
+   200→   200→
+   201→   201→    setIsSubmitting(true);
+   202→   202→    setSubmitMessage(null);
+   203→   203→
+   204→   204→    try {
+   205→   205→      const token = getToken();
+   206→   206→      if (!token) throw new Error('Not authenticated');
+   207→   207→
+   208→   208→      const res = await fetch('/api/wallet/withdraw', {
+   209→   209→        method: 'POST',
+   210→   210→        headers: {
+   211→   211→          'Content-Type': 'application/json',
+   212→   212→          Authorization: `Bearer ${token}`,
+   213→   213→        },
+   214→   214→        body: JSON.stringify({
+   215→   215→          currency: selectedCurrency,
+   216→   216→          amount: numericAmount,
+   217→   217→          method,
+   218→   218→          accountNumber: accountNumber.trim(),
+   219→   219→          accountName: accountName.trim(),
+   220→   220→        }),
+   221→   221→      });
+   222→   222→
+   223→   223→      const data = await res.json();
+   224→   224→
+   225→   225→      if (!res.ok) {
+   226→   226→        throw new Error(data.message || data.error || 'Withdrawal failed');
+   227→   227→      }
+   228→   228→
+   229→   229→      setSubmitMessage({ type: 'success', text: data.message || 'Withdrawal submitted successfully!' });
+   230→   230→      setTimeout(() => {
+   231→   231→        onSuccess();
+   232→   232→        onClose();
+   233→   233→      }, 1500);
+   234→   234→    } catch (err: unknown) {
+   235→   235→      const message = err instanceof Error ? err.message : 'Something went wrong';
+   236→   236→      setSubmitMessage({ type: 'error', text: message });
+   237→   237→    } finally {
+   238→   238→      setIsSubmitting(false);
+   239→   239→    }
+   240→   240→  }
+   241→   241→
+   242→   242→  return (
+   243→   243→    <motion.div
+   244→   244→      initial={{ opacity: 0 }}
+   245→   245→      animate={{ opacity: 1 }}
+   246→   246→      exit={{ opacity: 0 }}
+   247→   247→      transition={{ duration: 0.2 }}
+   248→   248→      style={{
+   249→   249→        position: 'fixed',
+   250→   250→        inset: 0,
+   251→   251→        zIndex: 100,
+   252→   252→        background: 'rgba(0,0,0,0.7)',
+   253→   253→        backdropFilter: 'blur(8px)',
+   254→   254→        WebkitBackdropFilter: 'blur(8px)',
+   255→   255→        display: 'flex',
+   256→   256→        alignItems: 'flex-end',
+   257→   257→        justifyContent: 'center',
+   258→   258→      }}
+   259→   259→      onClick={(e) => {
+   260→   260→        if (e.target === e.currentTarget) onClose();
+   261→   261→      }}
+   262→   262→    >
+   263→   263→      <motion.div
+   264→   264→        initial={{ y: '100%' }}
+   265→   265→        animate={{ y: 0 }}
+   266→   266→        exit={{ y: '100%' }}
+   267→   267→        transition={{ type: 'spring', damping: 28, stiffness: 300 }}
+   268→   268→        style={{
+   269→   269→          width: '100%',
+   270→   270→          maxWidth: 420,
+   271→   271→          maxHeight: '95vh',
+   272→   272→          background: 'var(--bg-card-solid)',
+   273→   273→          borderRadius: '20px 20px 0 0',
+   274→   274→          border: '1px solid var(--border-color)',
+   275→   275→          overflow: 'hidden',
+   276→   276→          display: 'flex',
+   277→   277→          flexDirection: 'column',
+   278→   278→        }}
+   279→   279→      >
+   280→   280→        {/* Header */}
+   281→   281→        <div
+   282→   282→          style={{
+   283→   283→            display: 'flex',
+   284→   284→            alignItems: 'center',
+   285→   285→            gap: 12,
+   286→   286→            padding: '16px 20px',
+   287→   287→            borderBottom: '1px solid var(--border-color)',
+   288→   288→            flexShrink: 0,
+   289→   289→          }}
+   290→   290→        >
+   291→   291→          <motion.button
+   292→   292→            whileTap={{ scale: 0.9 }}
+   293→   293→            onClick={onClose}
+   294→   294→            style={{
+   295→   295→              width: 36,
+   296→   296→              height: 36,
+   297→   297→              borderRadius: 10,
+   298→   298→              border: '1px solid var(--border-color)',
+   299→   299→              background: 'var(--bg-hover-subtle)',
+   300→   300→              color: 'var(--text-secondary)',
+   301→   301→              display: 'flex',
+   302→   302→              alignItems: 'center',
+   303→   303→              justifyContent: 'center',
+   304→   304→              cursor: 'pointer',
+   305→   305→              flexShrink: 0,
+   306→   306→            }}
+   307→   307→          >
+   308→   308→            <X size={18} />
+   309→   309→          </motion.button>
+   310→   310→          <h2 style={{ color: 'var(--text-primary)', fontSize: 18, fontWeight: 700, flex: 1 }}>
+   311→   311→            Withdraw Funds
+   312→   312→          </h2>
+   313→   313→        </div>
+   314→   314→
+   315→   315→        {/* Scrollable Content */}
+   316→   316→        <div
+   317→   317→          style={{
+   318→   318→            flex: 1,
+   319→   319→            overflowY: 'auto',
+   320→   320→            padding: '20px',
+   321→   321→            display: 'flex',
+   322→   322→            flexDirection: 'column',
+   323→   323→            gap: 20,
+   324→   324→          }}
+   325→   325→        >
+   326→   326→          {/* Currency Selector */}
+   327→   327→          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+   328→   328→            <label style={{ color: 'var(--text-secondary)', fontSize: 13, fontWeight: 500 }}>
+   329→   329→              Currency
+   330→   330→            </label>
+   331→   331→            <div style={{ position: 'relative' }}>
+   332→   332→              <button
+   333→   333→                type="button"
+   334→   334→                onClick={() => setCurrencyDropdownOpen(!currencyDropdownOpen)}
+   335→   335→                className="input-field"
+   336→   336→                style={{
+   337→   337→                  display: 'flex',
+   338→   338→                  alignItems: 'center',
+   339→   339→                  justifyContent: 'space-between',
+   340→   340→                  cursor: 'pointer',
+   341→   341→                  padding: '12px 16px',
+   342→   342→                }}
+   343→   343→              >
+   344→   344→                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+   345→   345→                  {getCurrencyIcon(selectedCurrency, 20)}
+   346→   346→                  <span style={{ color: 'var(--text-primary)', fontSize: 14, fontWeight: 500 }}>
+   347→   347→                    {selectedCurrency || 'Select currency'}
+   348→   348→                  </span>
+   349→   349→                </div>
+   350→   350→                {currencyDropdownOpen ? (
+   351→   351→                  <ChevronUp size={16} style={{ color: 'var(--text-muted)' }} />
+   352→   352→                ) : (
+   353→   353→                  <ChevronDown size={16} style={{ color: 'var(--text-muted)' }} />
+   354→   354→                )}
+   355→   355→              </button>
+   356→   356→
+   357→   357→              <AnimatePresence>
+   358→   358→                {currencyDropdownOpen && (
+   359→   359→                  <motion.div
+   360→   360→                    initial={{ opacity: 0, y: -6 }}
+   361→   361→                    animate={{ opacity: 1, y: 0 }}
+   362→   362→                    exit={{ opacity: 0, y: -6 }}
+   363→   363→                    transition={{ duration: 0.15 }}
+   364→   364→                    style={{
+   365→   365→                      position: 'absolute',
+   366→   366→                      top: 'calc(100% + 6px)',
+   367→   367→                      left: 0,
+   368→   368→                      right: 0,
+   369→   369→                      background: 'var(--bg-card-solid)',
+   370→   370→                      border: '1px solid var(--border-color)',
+   371→   371→                      borderRadius: 10,
+   372→   372→                      overflow: 'hidden',
+   373→   373→                      zIndex: 20,
+   374→   374→                      boxShadow: 'var(--shadow-lg)',
+   375→   375→                    }}
+   376→   376→                  >
+   377→   377→                    {balances.map((b) => (
+   378→   378→                      <button
+   379→   379→                        key={b.currency}
+   380→   380→                        type="button"
+   381→   381→                        onClick={() => {
+   382→   382→                          setSelectedCurrency(b.currency);
+   383→   383→                          setAmount('');
+   384→   384→                          setCurrencyDropdownOpen(false);
+   385→   385→                        }}
+   386→   386→                        style={{
+   387→   387→                          display: 'flex',
+   388→   388→                          alignItems: 'center',
+   389→   389→                          gap: 10,
+   390→   390→                          width: '100%',
+   391→   391→                          padding: '12px 16px',
+   392→   392→                          background: selectedCurrency === b.currency ? 'var(--bg-hover-subtle)' : 'transparent',
+   393→   393→                          border: 'none',
+   394→   394→                          borderBottom: '1px solid rgba(63,63,70,0.2)',
+   395→   395→                          color: 'var(--text-primary)',
+   396→   396→                          fontSize: 14,
+   397→   397→                          cursor: 'pointer',
+   398→   398→                          textAlign: 'left',
+   399→   399→                        }}
+   400→   400→                      >
+   401→   401→                        {getCurrencyIcon(b.currency, 20)}
+   402→   402→                        <div style={{ flex: 1 }}>
+   403→   403→                          <div style={{ fontWeight: 600 }}>{b.currency}</div>
+   404→   404→                          <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+   405→   405→                            Available: {formatCurrency(b.amount, b.currency)}
+   406→   406→                          </div>
+   407→   407→                        </div>
+   408→   408→                      </button>
+   409→   409→                    ))}
+   410→   410→                  </motion.div>
+   411→   411→                )}
+   412→   412→              </AnimatePresence>
+   413→   413→            </div>
+   414→   414→          </div>
+   415→   415→
+   416→   416→          {/* Amount Input */}
+   417→   417→          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+   418→   418→            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+   419→   419→              <label style={{ color: 'var(--text-secondary)', fontSize: 13, fontWeight: 500 }}>
+   420→   420→                Amount
+   421→   421→              </label>
+   422→   422→              <button
+   423→   423→                type="button"
+   424→   424→                onClick={() => setAmount(String(availableBalance))}
+   425→   425→                style={{
+   426→   426→                  background: 'none',
+   427→   427→                  border: 'none',
+   428→   428→                  color: 'var(--accent-blue)',
+   429→   429→                  fontSize: 12,
+   430→   430→                  fontWeight: 600,
+   431→   431→                  cursor: 'pointer',
+   432→   432→                  padding: 0,
+   433→   433→                }}
+   434→   434→              >
+   435→   435→                MAX
+   436→   436→              </button>
+   437→   437→            </div>
+   438→   438→            <div style={{ position: 'relative' }}>
+   439→   439→              <input
+   440→   440→                type="number"
+   441→   441→                className="input-field"
+   442→   442→                placeholder="0.00"
+   443→   443→                value={amount}
+   444→   444→                onChange={(e) => setAmount(e.target.value)}
+   445→   445→                min="0"
+   446→   446→                step="0.01"
+   447→   447→                style={{ paddingRight: 80 }}
+   448→   448→              />
+   449→   449→              <span
+   450→   450→                style={{
+   451→   451→                  position: 'absolute',
+   452→   452→                  right: 16,
+   453→   453→                  top: '50%',
+   454→   454→                  transform: 'translateY(-50%)',
+   455→   455→                  color: 'var(--text-muted)',
+   456→   456→                  fontSize: 13,
+   457→   457→                  fontWeight: 600,
+   458→   458→                  pointerEvents: 'none',
+   459→   459→                }}
+   460→   460→              >
+   461→   461→                {selectedCurrency}
+   462→   462→              </span>
+   463→   463→            </div>
+   464→   464→            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+   465→   465→              Available: <span style={{ color: 'var(--text-secondary)' }}>{formatCurrency(availableBalance, selectedCurrency)}</span>
+   466→   466→            </div>
+   467→   467→
+   468→   468→            {/* Fee & Net Display */}
+   469→   469→            {numericAmount > 0 && (
+   470→   470→              <motion.div
+   471→   471→                initial={{ opacity: 0, height: 0 }}
+   472→   472→                animate={{ opacity: 1, height: 'auto' }}
+   473→   473→                style={{
+   474→   474→                  display: 'flex',
+   475→   475→                  flexDirection: 'column',
+   476→   476→                  gap: 4,
+   477→   477→                  padding: '12px 14px',
+   478→   478→                  background: 'rgba(59, 130, 246, 0.05)',
+   479→   479→                  borderRadius: 10,
+   480→   480→                  border: '1px solid rgba(59, 130, 246, 0.1)',
+   481→   481→                  marginTop: 4,
+   482→   482→                }}
+   483→   483→              >
+   484→   484→                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+   485→   485→                  <span style={{ color: 'var(--text-muted)' }}>Fee (2%)</span>
+   486→   486→                  <span style={{ color: 'var(--text-secondary)' }}>
+   487→   487→                    {formatCurrency(fee, selectedCurrency)}
+   488→   488→                  </span>
+   489→   489→                </div>
+   490→   490→                <div
+   491→   491→                  style={{
+   492→   492→                    display: 'flex',
+   493→   493→                    justifyContent: 'space-between',
+   494→   494→                    fontSize: 14,
+   495→   495→                    fontWeight: 600,
+   496→   496→                    paddingTop: 4,
+   497→   497→                    borderTop: '1px solid rgba(63,63,70,0.3)',
+   498→   498→                    marginTop: 2,
+   499→   499→                  }}
+   500→   500→                >
+   501→   501→                  <span style={{ color: 'var(--text-secondary)' }}>You&apos;ll receive</span>
+   502→   502→                  <span style={{ color: '#4ade80' }}>
+   503→   503→                    {formatCurrency(netAmount, selectedCurrency)}
+   504→   504→                  </span>
+   505→   505→                </div>
+   506→   506→              </motion.div>
+   507→   507→            )}
+   508→   508→
+   509→   509→            {numericAmount > availableBalance && numericAmount > 0 && (
+   510→   510→              <div
+   511→   511→                style={{
+   512→   512→                  display: 'flex',
+   513→   513→                  alignItems: 'center',
+   514→   514→                  gap: 6,
+   515→   515→                  fontSize: 12,
+   516→   516→                  color: '#f87171',
+   517→   517→                  marginTop: 2,
+   518→   518→                }}
+   519→   519→              >
+   520→   520→                <AlertCircle size={14} />
+   521→   521→                Insufficient balance
+   522→   522→              </div>
+   523→   523→            )}
+   524→   524→          </div>
+   525→   525→
+   526→   526→          {/* Payment Method */}
+   527→   527→          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+   528→   528→            <label style={{ color: 'var(--text-secondary)', fontSize: 13, fontWeight: 500 }}>
+   529→   529→              Payment Method
+   530→   530→            </label>
+   531→   531→            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+   532→   532→              {PAYMENT_METHODS.map((pm) => {
+   533→   533→                const isSelected = method === pm.value;
+   534→   534→                return (
+   535→   535→                  <motion.button
+   536→   536→                    key={pm.value}
+   537→   537→                    type="button"
+   538→   538→                    whileTap={{ scale: 0.98 }}
+   539→   539→                    onClick={() => setMethod(pm.value)}
+   540→   540→                    style={{
+   541→   541→                      display: 'flex',
+   542→   542→                      alignItems: 'center',
+   543→   543→                      gap: 12,
+   544→   544→                      padding: '14px 16px',
+   545→   545→                      borderRadius: 12,
+   546→   546→                      border: isSelected
+   547→   547→                        ? '1.5px solid var(--accent-blue)'
+   548→   548→                        : '1px solid var(--border-color)',
+   549→   549→                      background: isSelected
+   550→   550→                        ? 'rgba(59, 130, 246, 0.08)'
+   551→   551→                        : 'var(--bg-hover-subtle)',
+   552→   552→                      cursor: 'pointer',
+   553→   553→                      transition: 'all 0.15s ease',
+   554→   554→                      width: '100%',
+   555→   555→                      textAlign: 'left',
+   556→   556→                    }}
+   557→   557→                  >
+   558→   558→                    <span style={{ fontSize: 22, lineHeight: 1 }}>{pm.icon}</span>
+   559→   559→                    <span
+   560→   560→                      style={{
+   561→   561→                        color: isSelected ? 'var(--text-primary)' : 'var(--text-secondary)',
+   562→   562→                        fontSize: 14,
+   563→   563→                        fontWeight: isSelected ? 600 : 500,
+   564→   564→                        flex: 1,
+   565→   565→                      }}
+   566→   566→                    >
+   567→   567→                      {pm.label}
+   568→   568→                    </span>
+   569→   569→                    <div
+   570→   570→                      style={{
+   571→   571→                        width: 20,
+   572→   572→                        height: 20,
+   573→   573→                        borderRadius: '50%',
+   574→   574→                        border: isSelected
+   575→   575→                          ? '2px solid var(--accent-blue)'
+   576→   576→                          : '2px solid var(--border-color)',
+   577→   577→                        display: 'flex',
+   578→   578→                        alignItems: 'center',
+   579→   579→                        justifyContent: 'center',
+   580→   580→                        background: isSelected ? 'var(--accent-blue)' : 'transparent',
+   581→   581→                        transition: 'all 0.15s ease',
+   582→   582→                      }}
+   583→   583→                    >
+   584→   584→                      {isSelected && (
+   585→   585→                        <motion.div
+   586→   586→                          initial={{ scale: 0 }}
+   587→   587→                          animate={{ scale: 1 }}
+   588→   588→                          style={{
+   589→   589→                            width: 8,
+   590→   590→                            height: 8,
+   591→   591→                            borderRadius: '50%',
+   592→   592→                            background: 'white',
+   593→   593→                          }}
+   594→   594→                        />
+   595→   595→                      )}
+   596→   596→                    </div>
+   597→   597→                  </motion.button>
+   598→   598→                );
+   599→   599→              })}
+   600→   600→            </div>
+   601→   601→          </div>
+   602→   602→
+   603→   603→          {/* Account Number */}
+   604→   604→          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+   605→   605→            <label style={{ color: 'var(--text-secondary)', fontSize: 13, fontWeight: 500 }}>
+   606→   606→              Account Number
+   607→   607→            </label>
+   608→   608→            <input
+   609→   609→              type="text"
+   610→   610→              className="input-field"
+   611→   611→              placeholder="Enter account number"
+   612→   612→              value={accountNumber}
+   613→   613→              onChange={(e) => setAccountNumber(e.target.value)}
+   614→   614→            />
+   615→   615→          </div>
+   616→   616→
+   617→   617→          {/* Account Name */}
+   618→   618→          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+   619→   619→            <label style={{ color: 'var(--text-secondary)', fontSize: 13, fontWeight: 500 }}>
+   620→   620→              Account Name
+   621→   621→            </label>
+   622→   622→            <input
+   623→   623→              type="text"
+   624→   624→              className="input-field"
+   625→   625→              placeholder="Enter account holder name"
+   626→   626→              value={accountName}
+   627→   627→              onChange={(e) => setAccountName(e.target.value)}
+   628→   628→            />
+   629→   629→          </div>
+   630→   630→
+   631→   631→          {/* Submit Message */}
+   632→   632→          <AnimatePresence>
+   633→   633→            {submitMessage && (
+   634→   634→              <motion.div
+   635→   635→                initial={{ opacity: 0, y: -8 }}
+   636→   636→                animate={{ opacity: 1, y: 0 }}
+   637→   637→                exit={{ opacity: 0, y: -8 }}
+   638→   638→                style={{
+   639→   639→                  display: 'flex',
+   640→   640→                  alignItems: 'center',
+   641→   641→                  gap: 10,
+   642→   642→                  padding: '14px 16px',
+   643→   643→                  borderRadius: 12,
+   644→   644→                  background:
+   645→   645→                    submitMessage.type === 'success'
+   646→   646→                      ? 'rgba(34, 197, 94, 0.08)'
+   647→   647→                      : 'rgba(239, 68, 68, 0.08)',
+   648→   648→                  border: `1px solid ${
+   649→   649→                    submitMessage.type === 'success'
+   650→   650→                      ? 'rgba(34, 197, 94, 0.2)'
+   651→   651→                      : 'rgba(239, 68, 68, 0.2)'
+   652→   652→                  }`,
+   653→   653→                }}
+   654→   654→              >
+   655→   655→                {submitMessage.type === 'success' ? (
+   656→   656→                  <CheckCircle size={20} style={{ color: '#4ade80', flexShrink: 0 }} />
+   657→   657→                ) : (
+   658→   658→                  <AlertCircle size={20} style={{ color: '#f87171', flexShrink: 0 }} />
+   659→   659→                )}
+   660→   660→                <span
+   661→   661→                  style={{
+   662→   662→                    color: submitMessage.type === 'success' ? '#4ade80' : '#f87171',
+   663→   663→                    fontSize: 13,
+   664→   664→                    fontWeight: 500,
+   665→   665→                  }}
+   666→   666→                >
+   667→   667→                  {submitMessage.text}
+   668→   668→                </span>
+   669→   669→              </motion.div>
+   670→   670→            )}
+   671→   671→          </AnimatePresence>
+   672→   672→        </div>
+   673→   673→
+   674→   674→        {/* Submit Button */}
+   675→   675→        <div
+   676→   676→          style={{
+   677→   677→            padding: '16px 20px',
+   678→   678→            borderTop: '1px solid var(--border-color)',
+   679→   679→            flexShrink: 0,
+   680→   680→          }}
+   681→   681→        >
+   682→   682→          <motion.button
+   683→   683→            whileHover={{ scale: 1.01 }}
+   684→   684→            whileTap={{ scale: 0.98 }}
+   685→   685→            className="btn-primary"
+   686→   686→            disabled={!canSubmit()}
+   687→   687→            onClick={handleSubmit}
+   688→   688→            style={{
+   689→   689→              width: '100%',
+   690→   690→              display: 'flex',
+   691→   691→              alignItems: 'center',
+   692→   692→              justifyContent: 'center',
+   693→   693→              gap: 8,
+   694→   694→              padding: '14px 24px',
+   695→   695→              fontSize: 15,
+   696→   696→              borderRadius: 12,
+   697→   697→              opacity: canSubmit() ? 1 : 0.5,
+   698→   698→            }}
+   699→   699→          >
+   700→   700→            {isSubmitting ? (
+   701→   701→              <>
+   702→   702→                <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} />
+   703→   703→                Processing...
+   704→   704→              </>
+   705→   705→            ) : (
+   706→   706→              <>
+   707→   707→                <ArrowUpRight size={18} />
+   708→   708→                Withdraw {numericAmount > 0 ? formatCurrency(numericAmount, selectedCurrency) : ''}
+   709→   709→              </>
+   710→   710→            )}
+   711→   711→          </motion.button>
+   712→   712→        </div>
+   713→   713→
+   714→   714→        {/* Spin keyframe for loader */}
+   715→   715→        <style>{`
+   716→   716→          @keyframes spin {
+   717→   717→            from { transform: rotate(0deg); }
+   718→   718→            to { transform: rotate(360deg); }
+   719→   719→          }
+   720→   720→        `}</style>
+   721→   721→      </motion.div>
+   722→   722→    </motion.div>
+   723→   723→  );
+   724→   724→}
+   725→   725→
+   726→   726→/* ─── Main Wallet Page ─── */
+   727→   727→
+   728→   728→export default function WalletPage() {
+   729→   729→  const { navigate } = useStore();
+   730→   730→
+   731→   731→  /* State */
+   732→   732→  const [walletData, setWalletData] = useState<WalletData | null>(null);
+   733→   733→  const [transactions, setTransactions] = useState<Transaction[]>([]);
+   734→   734→  const [pagination, setPagination] = useState<Pagination | null>(null);
+   735→   735→  const [balanceLoading, setBalanceLoading] = useState(true);
+   736→   736→  const [txLoading, setTxLoading] = useState(true);
+   737→   737→  const [txLoadingMore, setTxLoadingMore] = useState(false);
+   738→   738→  const [showWithdrawModal, setShowWithdrawModal] = useState(false);
+   739→   739→  const [balanceError, setBalanceError] = useState<string | null>(null);
+   740→   740→  const [txError, setTxError] = useState<string | null>(null);
+   741→   741→
+   742→   742→  /* Compute total balance from balances array */
+   743→   743→  const totalBalance =
+   744→   744→    walletData?.balances?.reduce((sum, b) => sum + (b.amount ?? 0), 0) ?? 0;
+   745→   745→
+   746→   746→  /* Fetch balance */
+   747→   747→  const fetchBalance = useCallback(async () => {
+   748→   748→    setBalanceLoading(true);
+   749→   749→    setBalanceError(null);
+   750→   750→    try {
+   751→   751→      const token = getToken();
+   752→   752→      if (!token) throw new Error('Not authenticated');
+   753→   753→      const res = await fetch('/api/wallet/balance', {
+   754→   754→        headers: { Authorization: `Bearer ${token}` },
+   755→   755→      });
+   756→   756→      if (!res.ok) throw new Error('Failed to load balance');
+   757→   757→      const data = await res.json();
+   758→   758→      setWalletData(data.wallet ?? data);
+   759→   759→    } catch (err: unknown) {
+   760→   760→      const msg = err instanceof Error ? err.message : 'Failed to load balance';
+   761→   761→      setBalanceError(msg);
+   762→   762→    } finally {
+   763→   763→      setBalanceLoading(false);
+   764→   764→    }
+   765→   765→  }, []);
+   766→   766→
+   767→   767→  /* Fetch transactions */
+   768→   768→  const fetchTransactions = useCallback(async (page: number = 1, append: boolean = false) => {
+   769→   769→    if (append) {
+   770→   770→      setTxLoadingMore(true);
+   771→   771→    } else {
+   772→   772→      setTxLoading(true);
+   773→   773→    }
+   774→   774→    setTxError(null);
+   775→   775→    try {
+   776→   776→      const token = getToken();
+   777→   777→      if (!token) throw new Error('Not authenticated');
+   778→   778→      const res = await fetch(`/api/wallet/transactions?page=${page}&limit=10`, {
+   779→   779→        headers: { Authorization: `Bearer ${token}` },
+   780→   780→      });
+   781→   781→      if (!res.ok) throw new Error('Failed to load transactions');
+   782→   782→      const data = await res.json();
+   783→   783→      if (append) {
+   784→   784→        setTransactions((prev) => [...prev, ...(data.transactions ?? [])]);
+   785→   785→      } else {
+   786→   786→        setTransactions(data.transactions ?? []);
+   787→   787→      }
+   788→   788→      setPagination(data.pagination ?? null);
+   789→   789→    } catch (err: unknown) {
+   790→   790→      const msg = err instanceof Error ? err.message : 'Failed to load transactions';
+   791→   791→      setTxError(msg);
+   792→   792→    } finally {
+   793→   793→      setTxLoading(false);
+   794→   794→      setTxLoadingMore(false);
+   795→   795→    }
+   796→   796→  }, []);
+   797→   797→
+   798→   798→  /* Load data on mount */
+   799→   799→  useEffect(() => {
+   800→   800→    let cancelled = false;
+   801→   801→    const init = async () => {
+   802→   802→      if (cancelled) return;
+   803→   803→      await fetchBalance();
+   804→   804→      if (cancelled) return;
+   805→   805→      await fetchTransactions(1, false);
+   806→   806→    };
+   807→   807→    init();
+   808→   808→    return () => { cancelled = true; };
+   809→   809→    // eslint-disable-next-line react-hooks/exhaustive-deps
+   810→   810→  }, []);
+   811→   811→
+   812→   812→  /* Load more transactions */
+   813→   813→  function loadMore() {
+   814→   814→    if (!pagination || pagination.page >= pagination.totalPages) return;
+   815→   815→    fetchTransactions(pagination.page + 1, true);
+   816→   816→  }
+   817→   817→
+   818→   818→  /* Handle withdraw success */
+   819→   819→  function handleWithdrawSuccess() {
+   820→   820→    fetchBalance();
+   821→   821→    fetchTransactions(1, false);
+   822→   822→  }
+   823→   823→
+   824→   824→  return (
+   825→   825→    <>
+   826→   826→      <motion.div
+   827→   827→        className="space-y-5"
+   828→   828→        style={{ paddingBottom: 40 }}
+   829→   829→        initial={{ opacity: 0, y: 12 }}
+   830→   830→        animate={{ opacity: 1, y: 0 }}
+   831→   831→        transition={{ duration: 0.35, ease: 'easeOut' }}
+   832→   832→      >
+   833→   833→        {/* ── Header ── */}
+   834→   834→        <div>
+   835→   835→          <h1
+   836→   836→            className="text-xl font-bold"
+   837→   837→            style={{ color: 'var(--text-primary)' }}
+   838→   838→          >
+   839→   839→            Wallet
+   840→   840→          </h1>
+   841→   841→          <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>
+   842→   842→            Manage your assets and transactions
+   843→   843→          </p>
+   844→   844→        </div>
+   845→   845→
+   846→   846→        {/* ── Total Balance Card ── */}
+   847→   847→        <motion.div
+   848→   848→          className="glass-card"
+   849→   849→          style={{ padding: '20px' }}
+   850→   850→          initial={{ opacity: 0, y: 8 }}
+   851→   851→          animate={{ opacity: 1, y: 0 }}
+   852→   852→          transition={{ delay: 0.05 }}
+   853→   853→        >
+   854→   854→          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+   855→   855→            <div
+   856→   856→              style={{
+   857→   857→                width: 40,
+   858→   858→                height: 40,
+   859→   859→                borderRadius: '50%',
+   860→   860→                background: 'rgba(59, 130, 246, 0.12)',
+   861→   861→                display: 'flex',
+   862→   862→                alignItems: 'center',
+   863→   863→                justifyContent: 'center',
+   864→   864→              }}
+   865→   865→            >
+   866→   866→              <Wallet size={20} style={{ color: 'var(--accent-blue)' }} />
+   867→   867→            </div>
+   868→   868→            <span style={{ color: 'var(--text-muted)', fontSize: 13, fontWeight: 500 }}>
+   869→   869→              Total Balance
+   870→   870→            </span>
+   871→   871→          </div>
+   872→   872→
+   873→   873→          {balanceLoading ? (
+   874→   874→            <Skeleton height="36px" width="60%" />
+   875→   875→          ) : balanceError ? (
+   876→   876→            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+   877→   877→              <AlertCircle size={16} style={{ color: '#f87171' }} />
+   878→   878→              <span style={{ color: '#f87171', fontSize: 14 }}>{balanceError}</span>
+   879→   879→            </div>
+   880→   880→          ) : (
+   881→   881→            <>
+   882→   882→              <div
+   883→   883→                className="text-3xl font-bold"
+   884→   884→                style={{ color: 'var(--text-primary)', letterSpacing: '-0.02em' }}
+   885→   885→              >
+   886→   886→                ${totalBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+   887→   887→              </div>
+   888→   888→              {walletData?.totalEquity !== undefined && walletData.totalEquity !== totalBalance && (
+   889→   889→                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
+   890→   890→                  Equity: ${formatCurrency(walletData.totalEquity)}
+   891→   891→                </div>
+   892→   892→              )}
+   893→   893→            </>
+   894→   894→          )}
+   895→   895→        </motion.div>
+   896→   896→
+   897→   897→        {/* ── Currency Balance Cards ── */}
+   898→   898→        {balanceLoading ? (
+   899→   899→          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+   900→   900→            <Skeleton height="110px" />
+   901→   901→            <Skeleton height="110px" />
+   902→   902→          </div>
+   903→   903→        ) : walletData?.balances && walletData.balances.length > 0 ? (
+   904→   904→          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+   905→   905→            {walletData.balances.map((b, i) => (
+   906→   906→              <motion.div
+   907→   907→                key={b.currency}
+   908→   908→                className="stat-card"
+   909→   909→                initial={{ opacity: 0, y: 10 }}
+   910→   910→                animate={{ opacity: 1, y: 0 }}
+   911→   911→                transition={{ delay: 0.08 + i * 0.04 }}
+   912→   912→                style={{ padding: '14px' }}
+   913→   913→              >
+   914→   914→                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+   915→   915→                  <div
+   916→   916→                    style={{
+   917→   917→                      width: 34,
+   918→   918→                      height: 34,
+   919→   919→                      borderRadius: '50%',
+   920→   920→                      background: getCurrencyColor(b.currency),
+   921→   921→                      display: 'flex',
+   922→   922→                      alignItems: 'center',
+   923→   923→                      justifyContent: 'center',
+   924→   924→                    }}
+   925→   925→                  >
+   926→   926→                    {getCurrencyIcon(b.currency, 18)}
+   927→   927→                  </div>
+   928→   928→                  <span style={{ color: 'var(--text-secondary)', fontSize: 13, fontWeight: 600 }}>
+   929→   929→                    {b.currency}
+   930→   930→                  </span>
+   931→   931→                </div>
+   932→   932→                <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>
+   933→   933→                  {formatCurrency(b.amount)}
+   934→   934→                </div>
+   935→   935→                {b.frozen > 0 && (
+   936→   936→                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+   937→   937→                    Frozen: {formatCurrency(b.frozen, b.currency)}
+   938→   938→                  </div>
+   939→   939→                )}
+   940→   940→              </motion.div>
+   941→   941→            ))}
+   942→   942→          </div>
+   943→   943→        ) : !balanceError ? (
+   944→   944→          <div
+   945→   945→            className="glass-card"
+   946→   946→            style={{ padding: '24px 16px', textAlign: 'center' }}
+   947→   947→          >
+   948→   948→            <Wallet size={32} style={{ color: 'var(--text-muted)', margin: '0 auto 8px' }} />
+   949→   949→            <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>No balances found</p>
+   950→   950→          </div>
+   951→   951→        ) : null}
+   952→   952→
+   953→   953→        {/* ── Action Buttons ── */}
+   954→   954→        <motion.div
+   955→   955→          style={{ display: 'flex', gap: 10 }}
+   956→   956→          initial={{ opacity: 0, y: 8 }}
+   957→   957→          animate={{ opacity: 1, y: 0 }}
+   958→   958→          transition={{ delay: 0.15 }}
+   959→   959→        >
+   960→   960→          <motion.button
+   961→   961→            className="btn-primary"
+   962→   962→            style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+   963→   963→            whileHover={{ scale: 1.02 }}
+   964→   964→            whileTap={{ scale: 0.97 }}
+   965→   965→            onClick={() => navigate(Pages.DEPOSIT)}
+   966→   966→          >
+   967→   967→            <ArrowDownLeft size={16} />
+   968→   968→            Deposit
+   969→   969→          </motion.button>
+   970→   970→          <motion.button
+   971→   971→            className="btn-secondary"
+   972→   972→            style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+   973→   973→            whileHover={{ scale: 1.02 }}
+   974→   974→            whileTap={{ scale: 0.97 }}
+   975→   975→            onClick={() => setShowWithdrawModal(true)}
+   976→   976→          >
+   977→   977→            <ArrowUpRight size={16} />
+   978→   978→            Withdraw
+   979→   979→          </motion.button>
+   980→   980→          <motion.button
+   981→   981→            className="btn-secondary"
+   982→   982→            style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+   983→   983→            whileHover={{ scale: 1.02 }}
+   984→   984→            whileTap={{ scale: 0.97 }}
+   985→   985→          >
+   986→   986→            <ArrowLeftRight size={16} />
+   987→   987→            Transfer
+   988→   988→          </motion.button>
+   989→   989→        </motion.div>
+   990→   990→
+   991→   991→        {/* ── Transaction History ── */}
+   992→   992→        <motion.div
+   993→   993→          initial={{ opacity: 0, y: 8 }}
+   994→   994→          animate={{ opacity: 1, y: 0 }}
+   995→   995→          transition={{ delay: 0.2 }}
+   996→   996→        >
+   997→   997→          <div
+   998→   998→            className="glass-card"
+   999→   999→            style={{ overflow: 'hidden' }}
+  1000→  1000→          >
+  1001→  1001→            <div
+  1002→  1002→              style={{
+  1003→  1003→                display: 'flex',
+  1004→  1004→                alignItems: 'center',
+  1005→  1005→                justifyContent: 'space-between',
+  1006→  1006→                padding: '16px 16px 0',
+  1007→  1007→              }}
+  1008→  1008→            >
+  1009→  1009→              <h2 style={{ color: 'var(--text-primary)', fontSize: 15, fontWeight: 700 }}>
+  1010→  1010→                Transaction History
+  1011→  1011→              </h2>
+  1012→  1012→            </div>
+  1013→  1013→
+  1014→  1014→            {/* Transaction List */}
+  1015→  1015→            <div style={{ padding: '12px 8px 8px' }}>
+  1016→  1016→              {txLoading ? (
+  1017→  1017→                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '0 8px' }}>
+  1018→  1018→                  {Array.from({ length: 5 }).map((_, i) => (
+  1019→  1019→                    <div
+  1020→  1020→                      key={i}
+  1021→  1021→                      style={{
+  1022→  1022→                        display: 'flex',
+  1023→  1023→                        alignItems: 'center',
+  1024→  1024→                        gap: 12,
+  1025→  1025→                        padding: '12px 8px',
+  1026→  1026→                        borderBottom: '1px solid rgba(63,63,70,0.15)',
+  1027→  1027→                      }}
+  1028→  1028→                    >
+  1029→  1029→                      <Skeleton width="36px" height="36px" style={{ borderRadius: '50%', flexShrink: 0 }} />
+  1030→  1030→                      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
+  1031→  1031→                        <Skeleton width="40%" height="14px" />
+  1032→  1032→                        <Skeleton width="25%" height="12px" />
+  1033→  1033→                      </div>
+  1034→  1034→                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
+  1035→  1035→                        <Skeleton width="80px" height="14px" />
+  1036→  1036→                        <Skeleton width="60px" height="16px" style={{ borderRadius: 9999 }} />
+  1037→  1037→                      </div>
+  1038→  1038→                    </div>
+  1039→  1039→                  ))}
+  1040→  1040→                </div>
+  1041→  1041→              ) : txError ? (
+  1042→  1042→                <div
+  1043→  1043→                  style={{
+  1044→  1044→                    padding: '32px 16px',
+  1045→  1045→                    textAlign: 'center',
+  1046→  1046→                    display: 'flex',
+  1047→  1047→                    flexDirection: 'column',
+  1048→  1048→                    alignItems: 'center',
+  1049→  1049→                    gap: 8,
+  1050→  1050→                  }}
+  1051→  1051→                >
+  1052→  1052→                  <AlertCircle size={28} style={{ color: 'var(--text-muted)' }} />
+  1053→  1053→                  <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>{txError}</span>
+  1054→  1054→                  <button
+  1055→  1055→                    className="btn-secondary"
+  1056→  1056→                    style={{ marginTop: 8, padding: '8px 16px', fontSize: 13 }}
+  1057→  1057→                    onClick={() => fetchTransactions(1, false)}
+  1058→  1058→                  >
+  1059→  1059→                    Retry
+  1060→  1060→                  </button>
+  1061→  1061→                </div>
+  1062→  1062→              ) : transactions.length === 0 ? (
+  1063→  1063→                <div
+  1064→  1064→                  style={{
+  1065→  1065→                    padding: '40px 16px',
+  1066→  1066→                    textAlign: 'center',
+  1067→  1067→                    display: 'flex',
+  1068→  1068→                    flexDirection: 'column',
+  1069→  1069→                    alignItems: 'center',
+  1070→  1070→                    gap: 8,
+  1071→  1071→                  }}
+  1072→  1072→                >
+  1073→  1073→                  <div
+  1074→  1074→                    style={{
+  1075→  1075→                      width: 52,
+  1076→  1076→                      height: 52,
+  1077→  1077→                      borderRadius: '50%',
+  1078→  1078→                      background: 'var(--bg-hover-subtle)',
+  1079→  1079→                      display: 'flex',
+  1080→  1080→                      alignItems: 'center',
+  1081→  1081→                      justifyContent: 'center',
+  1082→  1082→                      marginBottom: 4,
+  1083→  1083→                    }}
+  1084→  1084→                  >
+  1085→  1085→                    <ArrowLeftRight size={24} style={{ color: 'var(--text-muted)' }} />
+  1086→  1086→                  </div>
+  1087→  1087→                  <p style={{ color: 'var(--text-secondary)', fontSize: 14, fontWeight: 500 }}>
+  1088→  1088→                    No transactions yet
+  1089→  1089→                  </p>
+  1090→  1090→                  <p style={{ color: 'var(--text-muted)', fontSize: 12 }}>
+  1091→  1091→                    Your transaction history will appear here
+  1092→  1092→                  </p>
+  1093→  1093→                </div>
+  1094→  1094→              ) : (
+  1095→  1095→                <>
+  1096→  1096→                  <div style={{ display: 'flex', flexDirection: 'column' }}>
+  1097→  1097→                    {transactions.map((tx, idx) => {
+  1098→  1098→                      const type = tx.type?.toUpperCase() ?? '';
+  1099→  1099→                      const isIn = type === 'DEPOSIT';
+  1100→  1100→                      const status = tx.status ?? '';
+  1101→  1101→
+  1102→  1102→                      return (
+  1103→  1103→                        <motion.div
+  1104→  1104→                          key={tx._id ?? idx}
+  1105→  1105→                          initial={{ opacity: 0 }}
+  1106→  1106→                          animate={{ opacity: 1 }}
+  1107→  1107→                          transition={{ delay: idx * 0.03 }}
+  1108→  1108→                          style={{
+  1109→  1109→                            display: 'flex',
+  1110→  1110→                            alignItems: 'center',
+  1111→  1111→                            gap: 12,
+  1112→  1112→                            padding: '14px 8px',
+  1113→  1113→                            borderBottom: '1px solid rgba(63,63,70,0.15)',
+  1114→  1114→                          }}
+  1115→  1115→                        >
+  1116→  1116→                          {/* Type Icon */}
+  1117→  1117→                          <div
+  1118→  1118→                            style={{
+  1119→  1119→                              width: 40,
+  1120→  1120→                              height: 40,
+  1121→  1121→                              borderRadius: '50%',
+  1122→  1122→                              background: isIn
+  1123→  1123→                                ? 'rgba(34, 197, 94, 0.1)'
+  1124→  1124→                                : type === 'WITHDRAW'
+  1125→  1125→                                  ? 'rgba(239, 68, 68, 0.1)'
+  1126→  1126→                                  : 'rgba(59, 130, 246, 0.1)',
+  1127→  1127→                              display: 'flex',
+  1128→  1128→                              alignItems: 'center',
+  1129→  1129→                              justifyContent: 'center',
+  1130→  1130→                              flexShrink: 0,
+  1131→  1131→                            }}
+  1132→  1132→                          >
+  1133→  1133→                            {isIn ? (
+  1134→  1134→                              <ArrowDownLeft size={18} style={{ color: '#4ade80' }} />
+  1135→  1135→                            ) : type === 'WITHDRAW' ? (
+  1136→  1136→                              <ArrowUpRight size={18} style={{ color: '#f87171' }} />
+  1137→  1137→                            ) : (
+  1138→  1138→                              <ArrowLeftRight size={18} style={{ color: 'var(--accent-blue)' }} />
+  1139→  1139→                            )}
+  1140→  1140→                          </div>
+  1141→  1141→
+  1142→  1142→                          {/* Details */}
+  1143→  1143→                          <div style={{ flex: 1, minWidth: 0 }}>
+  1144→  1144→                            <div
+  1145→  1145→                              style={{
+  1146→  1146→                                display: 'flex',
+  1147→  1147→                                alignItems: 'center',
+  1148→  1148→                                gap: 6,
+  1149→  1149→                                marginBottom: 3,
+  1150→  1150→                              }}
+  1151→  1151→                            >
+  1152→  1152→                              <span
+  1153→  1153→                                style={{
+  1154→  1154→                                  color: 'var(--text-primary)',
+  1155→  1155→                                  fontSize: 13,
+  1156→  1156→                                  fontWeight: 600,
+  1157→  1157→                                }}
+  1158→  1158→                              >
+  1159→  1159→                                {type === 'DEPOSIT'
+  1160→  1160→                                  ? 'Deposit'
+  1161→  1161→                                  : type === 'WITHDRAW'
+  1162→  1162→                                    ? 'Withdraw'
+  1163→  1163→                                    : type === 'TRADE'
+  1164→  1164→                                      ? 'Trade'
+  1165→  1165→                                      : tx.type}
+  1166→  1166→                              </span>
+  1167→  1167→                              <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>
+  1168→  1168→                                {tx.currency ?? ''}
+  1169→  1169→                              </span>
+  1170→  1170→                            </div>
+  1171→  1171→                            <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>
+  1172→  1172→                              {formatDate(tx.createdAt)}
+  1173→  1173→                            </div>
+  1174→  1174→                          </div>
+  1175→  1175→
+  1176→  1176→                          {/* Amount & Status */}
+  1177→  1177→                          <div
+  1178→  1178→                            style={{
+  1179→  1179→                              display: 'flex',
+  1180→  1180→                              flexDirection: 'column',
+  1181→  1181→                              alignItems: 'flex-end',
+  1182→  1182→                              gap: 4,
+  1183→  1183→                              flexShrink: 0,
+  1184→  1184→                            }}
+  1185→  1185→                          >
+  1186→  1186→                            <span
+  1187→  1187→                              style={{
+  1188→  1188→                                fontSize: 14,
+  1189→  1189→                                fontWeight: 700,
+  1190→  1190→                                color: isIn ? '#4ade80' : '#f87171',
+  1191→  1191→                              }}
+  1192→  1192→                            >
+  1193→  1193→                              {isIn ? '+' : '-'}
+  1194→  1194→                              {formatCurrency(tx.amount)}
+  1195→  1195→                            </span>
+  1196→  1196→                            <span className={`badge ${getStatusBadge(status)}`}>
+  1197→  1197→                              {status.charAt(0).toUpperCase() + status.slice(1).toLowerCase()}
+  1198→  1198→                            </span>
+  1199→  1199→                          </div>
+  1200→  1200→                        </motion.div>
+  1201→  1201→                      );
+  1202→  1202→                    })}
+  1203→  1203→                  </div>
+  1204→  1204→
+  1205→  1205→                  {/* Load More */}
+  1206→  1206→                  {pagination && pagination.page < pagination.totalPages && (
+  1207→  1207→                    <div style={{ padding: '12px 8px', textAlign: 'center' }}>
+  1208→  1208→                      <motion.button
+  1209→  1209→                        className="btn-secondary"
+  1210→  1210→                        style={{
+  1211→  1211→                          width: '100%',
+  1212→  1212→                          padding: '10px',
+  1213→  1213→                          fontSize: 13,
+  1214→  1214→                          display: 'flex',
+  1215→  1215→                          alignItems: 'center',
+  1216→  1216→                          justifyContent: 'center',
+  1217→  1217→                          gap: 6,
+  1218→  1218→                        }}
+  1219→  1219→                        whileTap={{ scale: 0.98 }}
+  1220→  1220→                        onClick={loadMore}
+  1221→  1221→                        disabled={txLoadingMore}
+  1222→  1222→                      >
+  1223→  1223→                        {txLoadingMore ? (
+  1224→  1224→                          <>
+  1225→  1225→                            <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} />
+  1226→  1226→                            Loading...
+  1227→  1227→                          </>
+  1228→  1228→                        ) : (
+  1229→  1229→                          <>
+  1230→  1230→                            <ChevronDown size={14} />
+  1231→  1231→                            Load More ({pagination.total - transactions.length} remaining)
+  1232→  1232→                          </>
+  1233→  1233→                        )}
+  1234→  1234→                      </motion.button>
+  1235→  1235→                    </div>
+  1236→  1236→                  )}
+  1237→  1237→                </>
+  1238→  1238→              )}
+  1239→  1239→            </div>
+  1240→  1240→          </div>
+  1241→  1241→        </motion.div>
+  1242→  1242→      </motion.div>
+  1243→  1243→
+  1244→  1244→      {/* ── Withdraw Modal ── */}
+  1245→  1245→      <AnimatePresence>
+  1246→  1246→        {showWithdrawModal && walletData?.balances && (
+  1247→  1247→          <WithdrawModal
+  1248→  1248→            balances={walletData.balances}
+  1249→  1249→            onClose={() => setShowWithdrawModal(false)}
+  1250→  1250→            onSuccess={handleWithdrawSuccess}
+  1251→  1251→          />
+  1252→  1252→        )}
+  1253→  1253→      </AnimatePresence>
+  1254→  1254→
+  1255→  1255→      {/* Spin keyframe for transaction loader */}
+  1256→  1256→      <style>{`
+  1257→  1257→        @keyframes spin {
+  1258→  1258→          from { transform: rotate(0deg); }
+  1259→  1259→          to { transform: rotate(360deg); }
+  1260→  1260→        }
+  1261→  1261→      `}</style>
+  1262→  1262→    </>
+  1263→  1263→  );
+  1264→  1264→}

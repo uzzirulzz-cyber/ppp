@@ -1,0 +1,1072 @@
+     1→'use client';
+     2→
+     3→import React, { useState, useEffect } from 'react';
+     4→import { motion, AnimatePresence } from 'framer-motion';
+     5→import {
+     6→  Zap,
+     7→  TrendingUp,
+     8→  Users,
+     9→  ArrowRight,
+    10→  BarChart3,
+    11→  Shield,
+    12→  Globe,
+    13→  Clock,
+    14→  CheckCircle,
+    15→  ChevronDown,
+    16→  ChevronUp,
+    17→  Star,
+    18→  Award,
+    19→  MessageCircle,
+    20→  ExternalLink,
+    21→} from 'lucide-react';
+    22→import { useRouter } from 'next/navigation';
+    23→import Image from 'next/image';
+    24→
+    25→/* ─── NexTrade Pro Theme: Silver / Yellow / White / Red ─── */
+    26→const C = {
+    27→  bgDarkest: '#060A14',
+    28→  bgDark: '#0A0F1A',
+    29→  bgBase: '#0E1525',
+    30→  bgCard: 'rgba(15, 21, 37, 0.6)',
+    31→  bgCardHover: 'rgba(229, 57, 53, 0.08)',
+    32→  bgSubtle: 'rgba(10, 15, 26, 0.9)',
+    33→  border: 'rgba(192, 199, 209, 0.12)',
+    34→  borderHover: 'rgba(192, 199, 209, 0.25)',
+    35→  accent: '#E53935',
+    36→  accentDark: '#C62828',
+    37→  accentYellow: '#FFD700',
+    38→  ctaRed: '#E53935',
+    39→  ctaRedHover: '#FFD700',
+    40→  ctaRedGlow: 'rgba(229, 57, 53, 0.35)',
+    41→  textPrimary: '#FFFFFF',
+    42→  textSecondary: '#C0C7D1',
+    43→  textMuted: '#7A8599',
+    44→  green: '#22c55e',
+    45→  red: '#FF4757',
+    46→  gold: '#FFD700',
+    47→  silver: '#C0C7D1',
+    48→};
+    49→
+    50→/* ─── Data ─── */
+    51→
+    52→const achievementStats = [
+    53→  { value: '$21M+', label: 'Paid to Traders' },
+    54→  { value: '15,000+', label: 'Funded Traders' },
+    55→  { value: '90%', label: 'Profit Split' },
+    56→  { value: '24/7', label: 'Reward Processing' },
+    57→];
+    58→
+    59→const challengeTypes = [
+    60→  {
+    61→    name: '1-Phase',
+    62→    tagline: 'For expert traders',
+    63→    desc: 'Complete in as little as 3 days. Fastest route to funded.',
+    64→    highlights: ['Cheapest base price', 'Can be completed in 3 days', 'Higher leverage'],
+    65→    accent: C.accent,
+    66→  },
+    67→  {
+    68→    name: 'Classic 2-Phase',
+    69→    tagline: 'Ideal for beginners',
+    70→    desc: 'No consistency rule, lower Phase 2 target at just 5%.',
+    71→    highlights: ['No Consistency Rule', '5% Phase 2 Target', 'Lower price point'],
+    72→    accent: '#7F8BAB',
+    73→  },
+    74→  {
+    75→    name: 'Pro 2-Phase',
+    76→    tagline: 'Best for intra-day traders',
+    77→    desc: 'Daily and weekly reward options with fewer restrictions.',
+    78→    highlights: ['Daily & Weekly Rewards', 'Fewer restrictions', 'Swing Option'],
+    79→    accent: C.ctaRed,
+    80→    popular: true,
+    81→  },
+    82→];
+    83→
+    84→const accountSizes = ['$5,000', '$10,000', '$25,000', '$50,000', '$100,000', '$200,000'];
+    85→
+    86→const traderReviews = [
+    87→  {
+    88→    name: 'Marcus T.',
+    89→    role: 'Forex Trader',
+    90→    text: 'NexTrade Pro changed my career. Got funded in 5 days and I\'ve been earning rewards daily ever since. The platform is rock solid.',
+    91→    reward: '$8,420',
+    92→    avatar: 'M',
+    93→  },
+    94→  {
+    95→    name: 'Sarah K.',
+    96→    role: 'Indices Trader',
+    97→    text: 'The daily rewards system is incredible. No more waiting weeks for payouts. I requested my first reward and it was processed same day.',
+    98→    reward: '$3,150',
+    99→    avatar: 'S',
+   100→  },
+   101→  {
+   102→    name: 'Ahmed R.',
+   103→    role: 'Crypto Trader',
+   104→    text: 'Pro 2-Phase was perfect for my trading style. The 90% profit split with daily rewards makes this the best prop firm I\'ve worked with.',
+   105→    reward: '$12,800',
+   106→    avatar: 'A',
+   107→  },
+   108→];
+   109→
+   110→const comparisonRows = [
+   111→  { feature: 'Reward Frequency', us: 'Multiple times a day', them: '7 to 30 days' },
+   112→  { feature: 'First Reward Wait', us: '0 seconds', them: '7 to 30 days' },
+   113→  { feature: 'Reward Guarantee', us: 'Guaranteed', them: 'No guarantee' },
+   114→  { feature: 'Market Manipulation Risk', us: 'Absent', them: 'High risk' },
+   115→  { feature: 'Profit Split', us: 'Up to 90%', them: 'Up to 80%' },
+   116→];
+   117→
+   118→const faqItems = [
+   119→  {
+   120→    q: "What's the max daily drawdown?",
+   121→    a: 'Max Daily Drawdown is 5% on all Pro and Classic Challenges and Funded Accounts. It is 3% on the 1-Phase Challenge. The Daily Drawdown is balance based and calculated at the start of each trading day (5:00 p.m. EST).',
+   122→  },
+   123→  {
+   124→    q: 'How often can I request rewards?',
+   125→    a: 'With a NexTrade Pro Funded Account, you can request a reward any time you are at least 1% above your initial account balance. We aim to process all Funded Account rewards within 24 hours.',
+   126→  },
+   127→  {
+   128→    q: 'Can I trade news events?',
+   129→    a: 'Yes! News trading is allowed on all account types. You can also hold trades overnight and over weekends, giving you maximum flexibility in your trading strategy.',
+   130→  },
+   131→  {
+   132→    q: 'What leverage do you offer?',
+   133→    a: 'We offer up to 1:100 leverage on Forex, and 1:3 leverage on Metals, Oil, and Indices. Leverage varies by account type and asset class.',
+   134→  },
+   135→  {
+   136→    q: 'Are EAs and trading bots allowed?',
+   137→    a: 'Yes, Expert Advisors and trading bots are permitted on all account types. We support automated trading strategies to give every trader the tools they need to succeed.',
+   138→  },
+   139→];
+   140→
+   141→const featureBadges = [
+   142→  'Daily Rewards',
+   143→  'News Trading',
+   144→  'Weekend Holding',
+   145→  'Swing Option',
+   146→  'EAs Allowed',
+   147→];
+   148→
+   149→/* ─── Animation Variants ─── */
+   150→
+   151→const fadeUp = {
+   152→  hidden: { opacity: 0, y: 24 },
+   153→  visible: { opacity: 1, y: 0, transition: { duration: 0.55, ease: [0.22, 1, 0.36, 1] as const } },
+   154→};
+   155→
+   156→const stagger = {
+   157→  hidden: {},
+   158→  visible: { transition: { staggerChildren: 0.08 } },
+   159→};
+   160→
+   161→const scaleIn = {
+   162→  hidden: { opacity: 0, scale: 0.95 },
+   163→  visible: { opacity: 1, scale: 1, transition: { duration: 0.5, ease: [0.22, 1, 0.36, 1] as const } },
+   164→};
+   165→
+   166→/* ═══════════════════════════════════════════════
+   167→   FunderPro-Style HomePage
+   168→   ═══════════════════════════════════════════════ */
+   169→
+   170→export default function HomePage() {
+   171→  const router = useRouter();
+   172→  const [openFaq, setOpenFaq] = useState<number | null>(null);
+   173→  const [selectedSize, setSelectedSize] = useState('$50,000');
+   174→
+   175→  /* Allow body scroll for landing page */
+   176→  useEffect(() => {
+   177→    document.body.classList.add('landing-active');
+   178→    return () => document.body.classList.remove('landing-active');
+   179→  }, []);
+   180→
+   181→  const toggleFaq = (i: number) => setOpenFaq(openFaq === i ? null : i);
+   182→
+   183→  return (
+   184→    <div className="min-h-screen flex flex-col" style={{ backgroundColor: C.bgBase }}>
+   185→      {/* ═══ TOP NAV ═══ */}
+   186→      <nav
+   187→        className="sticky top-0 z-50 w-full flex items-center justify-between px-6 md:px-10 py-4"
+   188→        style={{
+   189→          background: 'rgba(15, 21, 39, 0.85)',
+   190→          backdropFilter: 'blur(16px)',
+   191→          borderBottom: `1px solid ${C.border}`,
+   192→        }}
+   193→      >
+   194→        <div className="flex items-center gap-3">
+   195→          <Image src="/logo.png" alt="NexTrade Pro" width={38} height={38} />
+   196→          <span className="text-xl font-bold hidden sm:block" style={{ color: C.textPrimary }}>
+   197→            NexTrade <span style={{ color: C.gold }}>Pro</span>
+   198→          </span>
+   199→        </div>
+   200→        <div className="flex items-center gap-3">
+   201→          <button
+   202→            onClick={() => router.push('/signin?tab=register')}
+   203→            className="px-5 py-2.5 rounded-lg text-sm font-semibold cursor-pointer transition-all duration-200 hover:opacity-90"
+   204→            style={{ color: C.textSecondary, background: 'transparent' }}
+   205→          >
+   206→            Sign Up
+   207→          </button>
+   208→          <button
+   209→            onClick={() => router.push('/signin')}
+   210→            className="px-5 py-2.5 rounded-lg text-sm font-semibold cursor-pointer transition-all duration-200 hover:scale-[1.03]"
+   211→            style={{
+   212→              background: C.ctaRed,
+   213→              color: '#fff',
+   214→              boxShadow: `0 0 20px ${C.ctaRedGlow}`,
+   215→            }}
+   216→          >
+   217→            Log In
+   218→          </button>
+   219→        </div>
+   220→      </nav>
+   221→
+   222→      {/* ═══ HERO ═══ */}
+   223→      <section className="relative flex flex-col items-center text-center px-6 pt-16 md:pt-24 pb-20 md:pb-28 overflow-hidden">
+   224→        {/* Background glow */}
+   225→        <div className="absolute inset-0 pointer-events-none overflow-hidden">
+   226→          <div
+   227→            className="absolute rounded-full"
+   228→            style={{
+   229→              width: 600,
+   230→              height: 600,
+   231→              top: -200,
+   232→              left: '50%',
+   233→              transform: 'translateX(-50%)',
+   234→              background: 'radial-gradient(circle, rgba(229,57,53,0.1) 0%, transparent 65%)',
+   235→            }}
+   236→          />
+   237→        </div>
+   238→
+   239→        <motion.div
+   240→          initial="hidden"
+   241→          animate="visible"
+   242→          variants={stagger}
+   243→          className="relative z-10 max-w-4xl mx-auto"
+   244→        >
+   245→          {/* Badge */}
+   246→          <motion.div variants={fadeUp} className="mb-6 flex justify-center">
+   247→            <span
+   248→              className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold"
+   249→              style={{
+   250→                background: 'rgba(255, 215, 0, 0.1)',
+   251→                border: '1px solid rgba(255, 215, 0, 0.25)',
+   252→                color: C.gold,
+   253→              }}
+   254→            >
+   255→              <Star size={13} fill={C.gold} />
+   256→              The Original Trading Firm with Daily Rewards
+   257→            </span>
+   258→          </motion.div>
+   259→
+   260→          {/* Heading */}
+   261→          <motion.h1
+   262→            variants={fadeUp}
+   263→            className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-extrabold tracking-tight leading-[1.08] mb-6"
+   264→            style={{ color: C.textPrimary }}
+   265→          >
+   266→            Trade Smarter.{' '}
+   267→            <span
+   268→              style={{
+   269→                background: `linear-gradient(135deg, ${C.accent}, ${C.accentYellow})`,
+   270→                WebkitBackgroundClip: 'text',
+   271→                WebkitTextFillColor: 'transparent',
+   272→              }}
+   273→            >
+   274→              Get Funded.
+   275→            </span>
+   276→            <br />
+   277→            Earn Daily.
+   278→          </motion.h1>
+   279→
+   280→          {/* Subtitle */}
+   281→          <motion.p
+   282→            variants={fadeUp}
+   283→            className="text-base sm:text-lg md:text-xl max-w-2xl mx-auto mb-10 leading-relaxed"
+   284→            style={{ color: C.textSecondary }}
+   285→          >
+   286→            Prove your skills, access up to $200K in funded capital, and receive daily rewards.
+   287→            Institutional-grade conditions for serious traders.
+   288→          </motion.p>
+   289→
+   290→          {/* CTAs */}
+   291→          <motion.div variants={fadeUp} className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16">
+   292→            <button
+   293→              onClick={() => router.push('/signin?tab=register')}
+   294→              className="group px-8 py-4 rounded-xl text-base font-bold cursor-pointer transition-all duration-300 hover:scale-[1.04] flex items-center gap-2"
+   295→              style={{
+   296→                background: C.ctaRed,
+   297→                color: '#fff',
+   298→                boxShadow: `0 0 30px ${C.ctaRedGlow}, 0 4px 15px rgba(0,0,0,0.3)`,
+   299→              }}
+   300→            >
+   301→              Start Your Challenge
+   302→              <ArrowRight size={18} className="transition-transform group-hover:translate-x-1" />
+   303→            </button>
+   304→            <button
+   305→              onClick={() => document.getElementById('pricing')?.scrollIntoView({ behavior: 'smooth' })}
+   306→              className="px-8 py-4 rounded-xl text-base font-semibold cursor-pointer transition-all duration-200 hover:opacity-90 flex items-center gap-2"
+   307→              style={{
+   308→                background: 'transparent',
+   309→                color: C.accent,
+   310→                border: `1px solid ${C.borderHover}`,
+   311→              }}
+   312→            >
+   313→              View Plans
+   314→            </button>
+   315→          </motion.div>
+   316→
+   317→          {/* Stats Row */}
+   318→          <motion.div
+   319→            variants={stagger}
+   320→            className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 max-w-3xl mx-auto"
+   321→          >
+   322→            {achievementStats.map((s) => (
+   323→              <motion.div
+   324→                key={s.label}
+   325→                variants={fadeUp}
+   326→                className="text-center"
+   327→              >
+   328→                <p className="text-2xl sm:text-3xl md:text-4xl font-extrabold mb-1" style={{ color: C.textPrimary }}>
+   329→                  {s.value}
+   330→                </p>
+   331→                <p className="text-xs sm:text-sm" style={{ color: C.textMuted }}>
+   332→                  {s.label}
+   333→                </p>
+   334→              </motion.div>
+   335→            ))}
+   336→          </motion.div>
+   337→        </motion.div>
+   338→      </section>
+   339→
+   340→      {/* ═══ FEATURE BADGES BAR ═══ */}
+   341→      <section
+   342→        className="w-full py-5"
+   343→        style={{ background: C.bgDark, borderTop: `1px solid ${C.border}`, borderBottom: `1px solid ${C.border}` }}
+   344→      >
+   345→        <div className="max-w-5xl mx-auto px-6 flex flex-wrap items-center justify-center gap-4 md:gap-8">
+   346→          {featureBadges.map((badge) => (
+   347→            <div key={badge} className="flex items-center gap-2">
+   348→              <CheckCircle size={16} style={{ color: C.accent }} />
+   349→              <span className="text-sm font-medium" style={{ color: C.textSecondary }}>
+   350→                {badge}
+   351→              </span>
+   352→            </div>
+   353→          ))}
+   354→        </div>
+   355→      </section>
+   356→
+   357→      {/* ═══ CHALLENGE TYPES ═══ */}
+   358→      <section className="w-full max-w-6xl mx-auto px-6 py-20 md:py-28">
+   359→        <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-60px' }}>
+   360→          <motion.h2
+   361→            variants={fadeUp}
+   362→            className="text-3xl sm:text-4xl md:text-5xl font-bold text-center mb-3"
+   363→            style={{ color: C.textPrimary }}
+   364→          >
+   365→            Choose Your Challenge
+   366→          </motion.h2>
+   367→          <motion.p
+   368→            variants={fadeUp}
+   369→            className="text-center mb-14 max-w-xl mx-auto"
+   370→            style={{ color: C.textMuted }}
+   371→          >
+   372→            Two paths. One Pro Trading Experience. Prove your skills or go instant to access elite conditions.
+   373→          </motion.p>
+   374→
+   375→          <motion.div
+   376→            variants={stagger}
+   377→            initial="hidden"
+   378→            whileInView="visible"
+   379→            viewport={{ once: true }}
+   380→            className="grid grid-cols-1 md:grid-cols-3 gap-5"
+   381→          >
+   382→            {challengeTypes.map((ct) => (
+   383→              <motion.div
+   384→                key={ct.name}
+   385→                variants={fadeUp}
+   386→                className="relative rounded-2xl p-7 flex flex-col transition-all duration-300 hover:translate-y-[-4px]"
+   387→                style={{
+   388→                  background: C.bgCard,
+   389→                  border: ct.popular ? `2px solid ${C.ctaRed}` : `1px solid ${C.border}`,
+   390→                  boxShadow: ct.popular ? `0 0 40px ${C.ctaRedGlow}` : 'none',
+   391→                }}
+   392→              >
+   393→                {ct.popular && (
+   394→                  <span
+   395→                    className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 rounded-full text-xs font-bold"
+   396→                    style={{ background: C.ctaRed, color: '#fff' }}
+   397→                  >
+   398→                    MOST POPULAR
+   399→                  </span>
+   400→                )}
+   401→
+   402→                <div className="flex items-center gap-3 mb-4">
+   403→                  <div
+   404→                    className="w-10 h-10 rounded-xl flex items-center justify-center"
+   405→                    style={{ background: `${ct.accent}20` }}
+   406→                  >
+   407→                    <Award size={20} style={{ color: ct.accent }} />
+   408→                  </div>
+   409→                  <div>
+   410→                    <h3 className="text-lg font-bold" style={{ color: C.textPrimary }}>
+   411→                      {ct.name}
+   412→                    </h3>
+   413→                    <p className="text-xs" style={{ color: ct.accent }}>
+   414→                      {ct.tagline}
+   415→                    </p>
+   416→                  </div>
+   417→                </div>
+   418→
+   419→                <p className="text-sm leading-relaxed mb-6" style={{ color: C.textSecondary }}>
+   420→                  {ct.desc}
+   421→                </p>
+   422→
+   423→                <ul className="flex flex-col gap-3 mb-8 flex-1">
+   424→                  {ct.highlights.map((h) => (
+   425→                    <li key={h} className="flex items-center gap-2.5 text-sm" style={{ color: C.textSecondary }}>
+   426→                      <CheckCircle size={15} style={{ color: ct.accent }} />
+   427→                      {h}
+   428→                    </li>
+   429→                  ))}
+   430→                </ul>
+   431→
+   432→                <button
+   433→                  onClick={() => router.push('/signin?tab=register')}
+   434→                  className="w-full py-3.5 rounded-xl text-sm font-bold cursor-pointer transition-all duration-200 hover:scale-[1.02]"
+   435→                  style={{
+   436→                    background: ct.popular ? C.ctaRed : `${ct.accent}18`,
+   437→                    color: ct.popular ? '#fff' : ct.accent,
+   438→                    border: ct.popular ? 'none' : `1px solid ${ct.accent}40`,
+   439→                  }}
+   440→                >
+   441→                  {ct.popular ? 'Get Started' : 'Learn More'}
+   442→                </button>
+   443→              </motion.div>
+   444→            ))}
+   445→          </motion.div>
+   446→        </motion.div>
+   447→      </section>
+   448→
+   449→      {/* ═══ PRICING / ACCOUNT SIZES ═══ */}
+   450→      <section
+   451→        id="pricing"
+   452→        className="w-full py-20 md:py-28"
+   453→        style={{ background: C.bgDark }}
+   454→      >
+   455→        <div className="max-w-6xl mx-auto px-6">
+   456→          <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-60px' }}>
+   457→            <motion.h2
+   458→              variants={fadeUp}
+   459→              className="text-3xl sm:text-4xl md:text-5xl font-bold text-center mb-3"
+   460→              style={{ color: C.textPrimary }}
+   461→            >
+   462→              Select Your Account Size
+   463→            </motion.h2>
+   464→            <motion.p
+   465→              variants={fadeUp}
+   466→              className="text-center mb-14 max-w-xl mx-auto"
+   467→              style={{ color: C.textMuted }}
+   468→            >
+   469→              Start your challenge with the capital that matches your ambitions. Scale up to $5 million.
+   470→            </motion.p>
+   471→
+   472→            {/* Size selector chips */}
+   473→            <motion.div
+   474→              variants={fadeUp}
+   475→              className="flex flex-wrap justify-center gap-3 mb-12"
+   476→            >
+   477→              {accountSizes.map((size) => (
+   478→                <button
+   479→                  key={size}
+   480→                  onClick={() => setSelectedSize(size)}
+   481→                  className="px-5 py-2.5 rounded-lg text-sm font-semibold cursor-pointer transition-all duration-200"
+   482→                  style={{
+   483→                    background: selectedSize === size ? C.ctaRed : `${C.bgCard}`,
+   484→                    color: selectedSize === size ? '#fff' : C.textSecondary,
+   485→                    border: selectedSize === size ? 'none' : `1px solid ${C.border}`,
+   486→                  }}
+   487→                >
+   488→                  {size}
+   489→                </button>
+   490→              ))}
+   491→            </motion.div>
+   492→
+   493→            {/* Selected size detail card */}
+   494→            <motion.div
+   495→              variants={scaleIn}
+   496→              initial="hidden"
+   497→              whileInView="visible"
+   498→              viewport={{ once: true }}
+   499→              className="max-w-3xl mx-auto rounded-2xl p-8 md:p-10"
+   500→              style={{
+   501→                background: C.bgCard,
+   502→                border: `1px solid ${C.border}`,
+   503→              }}
+   504→            >
+   505→              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-8">
+   506→                <div>
+   507→                  <p className="text-sm font-medium mb-2" style={{ color: C.textMuted }}>
+   508→                    Pro 2-Phase Challenge
+   509→                  </p>
+   510→                  <p className="text-5xl md:text-6xl font-extrabold mb-2" style={{ color: C.textPrimary }}>
+   511→                    {selectedSize}
+   512→                  </p>
+   513→                  <p className="text-sm" style={{ color: C.accent }}>
+   514→                    Up to 90% profit split
+   515→                  </p>
+   516→                </div>
+   517→
+   518→                <div className="flex flex-col gap-4 text-sm">
+   519→                  <div className="flex items-center gap-3">
+   520→                    <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: `${C.accent}15` }}>
+   521→                      <TrendingUp size={16} style={{ color: C.accent }} />
+   522→                    </div>
+   523→                    <div>
+   524→                      <p style={{ color: C.textMuted }}>Profit Target</p>
+   525→                      <p className="font-semibold" style={{ color: C.textPrimary }}>10% (Phase 1) / 5% (Phase 2)</p>
+   526→                    </div>
+   527→                  </div>
+   528→                  <div className="flex items-center gap-3">
+   529→                    <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: `${C.accent}15` }}>
+   530→                      <Shield size={16} style={{ color: C.accent }} />
+   531→                    </div>
+   532→                    <div>
+   533→                      <p style={{ color: C.textMuted }}>Max Drawdown</p>
+   534→                      <p className="font-semibold" style={{ color: C.textPrimary }}>5% Daily / 10% Overall</p>
+   535→                    </div>
+   536→                  </div>
+   537→                  <div className="flex items-center gap-3">
+   538→                    <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: `${C.accent}15` }}>
+   539→                      <Clock size={16} style={{ color: C.accent }} />
+   540→                    </div>
+   541→                    <div>
+   542→                      <p style={{ color: C.textMuted }}>Duration</p>
+   543→                      <p className="font-semibold" style={{ color: C.textPrimary }}>Unlimited</p>
+   544→                    </div>
+   545→                  </div>
+   546→                </div>
+   547→              </div>
+   548→
+   549→              <div className="mt-8 pt-8 flex flex-col sm:flex-row items-center gap-4" style={{ borderTop: `1px solid ${C.border}` }}>
+   550→                <button
+   551→                  onClick={() => router.push('/signin?tab=register')}
+   552→                  className="group w-full sm:w-auto px-8 py-4 rounded-xl text-base font-bold cursor-pointer transition-all duration-300 hover:scale-[1.03] flex items-center justify-center gap-2"
+   553→                  style={{
+   554→                    background: C.ctaRed,
+   555→                    color: '#fff',
+   556→                    boxShadow: `0 0 25px ${C.ctaRedGlow}`,
+   557→                  }}
+   558→                >
+   559→                  Start Challenge
+   560→                  <ArrowRight size={18} className="transition-transform group-hover:translate-x-1" />
+   561→                </button>
+   562→                <p className="text-xs" style={{ color: C.textMuted }}>
+   563→                  Price processed with your first reward. No upfront fee deduction.
+   564→                </p>
+   565→              </div>
+   566→            </motion.div>
+   567→          </motion.div>
+   568→        </div>
+   569→      </section>
+   570→
+   571→      {/* ═══ TRADER REVIEWS ═══ */}
+   572→      <section className="w-full max-w-6xl mx-auto px-6 py-20 md:py-28">
+   573→        <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-60px' }}>
+   574→          <motion.h2
+   575→            variants={fadeUp}
+   576→            className="text-3xl sm:text-4xl md:text-5xl font-bold text-center mb-3"
+   577→            style={{ color: C.textPrimary }}
+   578→          >
+   579→            Real People. Real Rewards.
+   580→          </motion.h2>
+   581→          <motion.p
+   582→            variants={fadeUp}
+   583→            className="text-center mb-14 max-w-xl mx-auto"
+   584→            style={{ color: C.textMuted }}
+   585→          >
+   586→            Trader success speaks for itself. These are real stories from funded traders.
+   587→          </motion.p>
+   588→
+   589→          <motion.div
+   590→            variants={stagger}
+   591→            initial="hidden"
+   592→            whileInView="visible"
+   593→            viewport={{ once: true }}
+   594→            className="grid grid-cols-1 md:grid-cols-3 gap-5"
+   595→          >
+   596→            {traderReviews.map((review) => (
+   597→              <motion.div
+   598→                key={review.name}
+   599→                variants={fadeUp}
+   600→                className="rounded-2xl p-7 transition-all duration-300 hover:translate-y-[-4px]"
+   601→                style={{
+   602→                  background: C.bgCard,
+   603→                  border: `1px solid ${C.border}`,
+   604→                }}
+   605→              >
+   606→                {/* Stars */}
+   607→                <div className="flex items-center gap-1 mb-5">
+   608→                  {[...Array(5)].map((_, i) => (
+   609→                    <Star key={i} size={15} fill={C.accent} style={{ color: C.accent }} />
+   610→                  ))}
+   611→                </div>
+   612→
+   613→                <p className="text-sm leading-relaxed mb-6" style={{ color: C.textSecondary }}>
+   614→                  &ldquo;{review.text}&rdquo;
+   615→                </p>
+   616→
+   617→                <div
+   618→                  className="flex items-center justify-between pt-5"
+   619→                  style={{ borderTop: `1px solid ${C.border}` }}
+   620→                >
+   621→                  <div className="flex items-center gap-3">
+   622→                    <div
+   623→                      className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold"
+   624→                      style={{
+   625→                        background: `linear-gradient(135deg, ${C.accent}, ${C.accentYellow})`,
+   626→                        color: '#fff',
+   627→                      }}
+   628→                    >
+   629→                      {review.avatar}
+   630→                    </div>
+   631→                    <div>
+   632→                      <p className="text-sm font-semibold" style={{ color: C.textPrimary }}>
+   633→                        {review.name}
+   634→                      </p>
+   635→                      <p className="text-xs" style={{ color: C.textMuted }}>
+   636→                        {review.role}
+   637→                      </p>
+   638→                    </div>
+   639→                  </div>
+   640→                  <div className="text-right">
+   641→                    <p className="text-xs" style={{ color: C.textMuted }}>Total Rewards</p>
+   642→                    <p className="text-lg font-bold" style={{ color: C.green }}>
+   643→                      {review.reward}
+   644→                    </p>
+   645→                  </div>
+   646→                </div>
+   647→              </motion.div>
+   648→            ))}
+   649→          </motion.div>
+   650→        </motion.div>
+   651→      </section>
+   652→
+   653→      {/* ═══ COMPARISON TABLE ═══ */}
+   654→      <section
+   655→        className="w-full py-20 md:py-28"
+   656→        style={{ background: C.bgDark }}
+   657→      >
+   658→        <div className="max-w-4xl mx-auto px-6">
+   659→          <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-60px' }}>
+   660→            <motion.h2
+   661→              variants={fadeUp}
+   662→              className="text-3xl sm:text-4xl md:text-5xl font-bold text-center mb-3"
+   663→              style={{ color: C.textPrimary }}
+   664→            >
+   665→              Pro-Trader. Always.
+   666→            </motion.h2>
+   667→            <motion.p
+   668→              variants={fadeUp}
+   669→              className="text-center mb-14 max-w-xl mx-auto"
+   670→              style={{ color: C.textMuted }}
+   671→            >
+   672→              Setting the new industry standard for transparent, fair, and secure rewards.
+   673→            </motion.p>
+   674→
+   675→            <motion.div
+   676→              variants={scaleIn}
+   677→              initial="hidden"
+   678→              whileInView="visible"
+   679→              viewport={{ once: true }}
+   680→              className="rounded-2xl overflow-hidden"
+   681→              style={{ border: `1px solid ${C.border}` }}
+   682→            >
+   683→              {/* Table Header */}
+   684→              <div
+   685→                className="grid grid-cols-3 gap-4 px-6 py-4 text-sm font-bold"
+   686→                style={{ background: C.bgCard, color: C.textMuted }}
+   687→              >
+   688→                <span>Feature</span>
+   689→                <span className="text-center" style={{ color: C.accent }}>
+   690→                  NexTrade Pro
+   691→                </span>
+   692→                <span className="text-center">Industry Average</span>
+   693→              </div>
+   694→
+   695→              {/* Rows */}
+   696→              {comparisonRows.map((row, i) => (
+   697→                <div
+   698→                  key={row.feature}
+   699→                  className="grid grid-cols-3 gap-4 px-6 py-4 text-sm transition-colors duration-200"
+   700→                  style={{
+   701→                    background: i % 2 === 0 ? C.bgCard : 'transparent',
+   702→                    borderTop: `1px solid ${C.border}`,
+   703→                  }}
+   704→                >
+   705→                  <span className="font-medium" style={{ color: C.textSecondary }}>
+   706→                    {row.feature}
+   707→                  </span>
+   708→                  <span className="text-center font-semibold" style={{ color: C.green }}>
+   709→                    {row.us}
+   710→                  </span>
+   711→                  <span className="text-center" style={{ color: C.textMuted }}>
+   712→                    {row.them}
+   713→                  </span>
+   714→                </div>
+   715→              ))}
+   716→            </motion.div>
+   717→          </motion.div>
+   718→        </div>
+   719→      </section>
+   720→
+   721→      {/* ═══ WHY CHOOSE US ═══ */}
+   722→      <section className="w-full max-w-6xl mx-auto px-6 py-20 md:py-28">
+   723→        <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-60px' }}>
+   724→          <motion.h2
+   725→            variants={fadeUp}
+   726→            className="text-3xl sm:text-4xl md:text-5xl font-bold text-center mb-14"
+   727→            style={{ color: C.textPrimary }}
+   728→          >
+   729→            Why NexTrade Pro
+   730→          </motion.h2>
+   731→
+   732→          <motion.div
+   733→            variants={stagger}
+   734→            initial="hidden"
+   735→            whileInView="visible"
+   736→            viewport={{ once: true }}
+   737→            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5"
+   738→          >
+   739→            {[
+   740→              { icon: Zap, title: 'Instant Account Setup', desc: 'Get started in minutes. No lengthy verification, no delays. Your funded trading journey begins immediately.' },
+   741→              { icon: Clock, title: 'Daily Reward Processing', desc: 'Request rewards any time you\'re 1% above starting balance. We process within 24 hours, not weeks.' },
+   742→              { icon: Shield, title: 'Bank-Grade Security', desc: 'Enterprise encryption, two-factor authentication, and cold storage for all digital assets on the platform.' },
+   743→              { icon: Globe, title: 'Multi-Asset Trading', desc: 'Trade forex, metals, indices, and crypto from a single funded account with professional-grade execution.' },
+   744→              { icon: BarChart3, title: 'Advanced Analytics', desc: 'Real-time performance dashboards, drawdown monitoring, and detailed trade history at your fingertips.' },
+   745→              { icon: Users, title: 'Global Community', desc: 'Join 15,000+ funded traders in our Discord. Share strategies, get support, and grow together.' },
+   746→            ].map((f) => (
+   747→              <motion.div
+   748→                key={f.title}
+   749→                variants={fadeUp}
+   750→                className="rounded-2xl p-7 transition-all duration-300 hover:translate-y-[-3px] group"
+   751→                style={{
+   752→                  background: C.bgCard,
+   753→                  border: `1px solid ${C.border}`,
+   754→                }}
+   755→              >
+   756→                <div
+   757→                  className="w-12 h-12 rounded-xl flex items-center justify-center mb-5 transition-transform duration-300 group-hover:scale-110"
+   758→                  style={{ background: `${C.accent}15` }}
+   759→                >
+   760→                  <f.icon size={22} style={{ color: C.accent }} />
+   761→                </div>
+   762→                <h3 className="text-lg font-bold mb-2" style={{ color: C.textPrimary }}>
+   763→                  {f.title}
+   764→                </h3>
+   765→                <p className="text-sm leading-relaxed" style={{ color: C.textSecondary }}>
+   766→                  {f.desc}
+   767→                </p>
+   768→              </motion.div>
+   769→            ))}
+   770→          </motion.div>
+   771→        </motion.div>
+   772→      </section>
+   773→
+   774→      {/* ═══ FAQ ═══ */}
+   775→      <section
+   776→        className="w-full py-20 md:py-28"
+   777→        style={{ background: C.bgDark }}
+   778→      >
+   779→        <div className="max-w-3xl mx-auto px-6">
+   780→          <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-60px' }}>
+   781→            <motion.h2
+   782→              variants={fadeUp}
+   783→              className="text-3xl sm:text-4xl md:text-5xl font-bold text-center mb-3"
+   784→              style={{ color: C.textPrimary }}
+   785→            >
+   786→              Frequently Asked Questions
+   787→            </motion.h2>
+   788→            <motion.p
+   789→              variants={fadeUp}
+   790→              className="text-center mb-14"
+   791→              style={{ color: C.textMuted }}
+   792→            >
+   793→              Our support team is available 24/7 via live chat.
+   794→            </motion.p>
+   795→
+   796→            <motion.div
+   797→              variants={stagger}
+   798→              initial="hidden"
+   799→              whileInView="visible"
+   800→              viewport={{ once: true }}
+   801→              className="flex flex-col gap-3"
+   802→            >
+   803→              {faqItems.map((faq, i) => (
+   804→                <motion.div
+   805→                  key={i}
+   806→                  variants={fadeUp}
+   807→                  className="rounded-xl overflow-hidden transition-all duration-300"
+   808→                  style={{
+   809→                    background: C.bgCard,
+   810→                    border: `1px solid ${openFaq === i ? C.borderHover : C.border}`,
+   811→                  }}
+   812→                >
+   813→                  <button
+   814→                    onClick={() => toggleFaq(i)}
+   815→                    className="w-full flex items-center justify-between px-6 py-5 text-left cursor-pointer"
+   816→                  >
+   817→                    <span className="text-sm font-semibold pr-4" style={{ color: C.textPrimary }}>
+   818→                      {faq.q}
+   819→                    </span>
+   820→                    {openFaq === i ? (
+   821→                      <ChevronUp size={18} style={{ color: C.accent, flexShrink: 0 }} />
+   822→                    ) : (
+   823→                      <ChevronDown size={18} style={{ color: C.textMuted, flexShrink: 0 }} />
+   824→                    )}
+   825→                  </button>
+   826→                  <AnimatePresence>
+   827→                    {openFaq === i && (
+   828→                      <motion.div
+   829→                        initial={{ height: 0, opacity: 0 }}
+   830→                        animate={{ height: 'auto', opacity: 1 }}
+   831→                        exit={{ height: 0, opacity: 0 }}
+   832→                        transition={{ duration: 0.25, ease: 'easeInOut' }}
+   833→                        className="overflow-hidden"
+   834→                      >
+   835→                        <p
+   836→                          className="px-6 pb-5 text-sm leading-relaxed"
+   837→                          style={{ color: C.textSecondary }}
+   838→                        >
+   839→                          {faq.a}
+   840→                        </p>
+   841→                      </motion.div>
+   842→                    )}
+   843→                  </AnimatePresence>
+   844→                </motion.div>
+   845→              ))}
+   846→            </motion.div>
+   847→          </motion.div>
+   848→        </div>
+   849→      </section>
+   850→
+   851→      {/* ═══ FINAL CTA ═══ */}
+   852→      <section className="w-full py-20 md:py-28 relative overflow-hidden">
+   853→        <div className="absolute inset-0 pointer-events-none">
+   854→          <div
+   855→            className="absolute rounded-full"
+   856→            style={{
+   857→              width: 500,
+   858→              height: 500,
+   859→              top: '50%',
+   860→              left: '50%',
+   861→              transform: 'translate(-50%, -50%)',
+   862→              background: `radial-gradient(circle, ${C.ctaRedGlow} 0%, transparent 60%)`,
+   863→            }}
+   864→          />
+   865→        </div>
+   866→
+   867→        <motion.div
+   868→          initial="hidden"
+   869→          whileInView="visible"
+   870→          viewport={{ once: true, margin: '-60px' }}
+   871→          className="relative z-10 max-w-3xl mx-auto px-6 text-center"
+   872→        >
+   873→          <motion.h2
+   874→            variants={fadeUp}
+   875→            className="text-3xl sm:text-4xl md:text-5xl font-bold mb-5"
+   876→            style={{ color: C.textPrimary }}
+   877→          >
+   878→            Ready to Get Funded?
+   879→          </motion.h2>
+   880→          <motion.p
+   881→            variants={fadeUp}
+   882→            className="text-base sm:text-lg mb-10 max-w-xl mx-auto leading-relaxed"
+   883→            style={{ color: C.textSecondary }}
+   884→          >
+   885→            Join thousands of traders earning daily rewards. Your challenge starts now.
+   886→          </motion.p>
+   887→          <motion.div variants={fadeUp} className="flex flex-col sm:flex-row items-center justify-center gap-4">
+   888→            <button
+   889→              onClick={() => router.push('/signin?tab=register')}
+   890→              className="group px-10 py-4 rounded-xl text-base font-bold cursor-pointer transition-all duration-300 hover:scale-[1.04] flex items-center gap-2"
+   891→              style={{
+   892→                background: C.ctaRed,
+   893→                color: '#fff',
+   894→                boxShadow: `0 0 40px ${C.ctaRedGlow}, 0 4px 20px rgba(0,0,0,0.3)`,
+   895→              }}
+   896→            >
+   897→              Start Trading Now
+   898→              <ArrowRight size={18} className="transition-transform group-hover:translate-x-1" />
+   899→            </button>
+   900→            <button
+   901→              onClick={() => document.getElementById('pricing')?.scrollIntoView({ behavior: 'smooth' })}
+   902→              className="px-8 py-4 rounded-xl text-base font-semibold cursor-pointer transition-all duration-200"
+   903→              style={{
+   904→                background: 'transparent',
+   905→                color: C.textSecondary,
+   906→                border: `1px solid ${C.border}`,
+   907→              }}
+   908→            >
+   909→              Compare Plans
+   910→            </button>
+   911→          </motion.div>
+   912→        </motion.div>
+   913→      </section>
+   914→
+   915→      {/* ═══ FOOTER ═══ */}
+   916→      <footer
+   917→        className="w-full"
+   918→        style={{ background: C.bgDarkest, borderTop: `1px solid ${C.border}` }}
+   919→      >
+   920→        <div className="max-w-6xl mx-auto px-6 py-14">
+   921→          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-10 mb-12">
+   922→            {/* Brand */}
+   923→            <div>
+   924→              <div className="flex items-center gap-3 mb-5">
+   925→                <Image src="/logo.png" alt="NexTrade Pro" width={36} height={36} />
+   926→                <span className="text-lg font-bold" style={{ color: C.textPrimary }}>
+   927→                  NexTrade Pro
+   928→                </span>
+   929→              </div>
+   930→              <p className="text-sm leading-relaxed mb-6" style={{ color: C.textMuted }}>
+   931→                The original prop trading firm with daily rewards. Prove your skills and trade with funded capital.
+   932→              </p>
+   933→              <div className="flex items-center gap-3">
+   934→                <a
+   935→                  href="#"
+   936→                  className="w-9 h-9 rounded-lg flex items-center justify-center transition-all duration-200 hover:scale-110"
+   937→                  style={{ background: C.bgCard, border: `1px solid ${C.border}` }}
+   938→                >
+   939→                  <MessageCircle size={16} style={{ color: C.textSecondary }} />
+   940→                </a>
+   941→                <a
+   942→                  href="#"
+   943→                  className="w-9 h-9 rounded-lg flex items-center justify-center transition-all duration-200 hover:scale-110"
+   944→                  style={{ background: C.bgCard, border: `1px solid ${C.border}` }}
+   945→                >
+   946→                  <ExternalLink size={16} style={{ color: C.textSecondary }} />
+   947→                </a>
+   948→              </div>
+   949→            </div>
+   950→
+   951→            {/* Company */}
+   952→            <div>
+   953→              <h4
+   954→                className="text-xs font-bold uppercase tracking-widest mb-5"
+   955→                style={{ color: C.textSecondary }}
+   956→              >
+   957→                Company
+   958→              </h4>
+   959→              <ul className="flex flex-col gap-3">
+   960→                {['About Us', 'Careers', 'Blog', 'Press'].map((link) => (
+   961→                  <li key={link}>
+   962→                    <span
+   963→                      className="text-sm cursor-pointer transition-colors duration-200"
+   964→                      style={{ color: C.textMuted }}
+   965→                    >
+   966→                      {link}
+   967→                    </span>
+   968→                  </li>
+   969→                ))}
+   970→              </ul>
+   971→            </div>
+   972→
+   973→            {/* Trading */}
+   974→            <div>
+   975→              <h4
+   976→                className="text-xs font-bold uppercase tracking-widest mb-5"
+   977→                style={{ color: C.textSecondary }}
+   978→              >
+   979→                Trading
+   980→              </h4>
+   981→              <ul className="flex flex-col gap-3">
+   982→                {['Challenge Rules', 'Pricing', 'FAQ', 'Support'].map((link) => (
+   983→                  <li key={link}>
+   984→                    <span
+   985→                      className="text-sm cursor-pointer transition-colors duration-200"
+   986→                      style={{ color: C.textMuted }}
+   987→                    >
+   988→                      {link}
+   989→                    </span>
+   990→                  </li>
+   991→                ))}
+   992→              </ul>
+   993→            </div>
+   994→
+   995→            {/* Legal */}
+   996→            <div>
+   997→              <h4
+   998→                className="text-xs font-bold uppercase tracking-widest mb-5"
+   999→                style={{ color: C.textSecondary }}
+  1000→              >
+  1001→                Legal
+  1002→              </h4>
+  1003→              <ul className="flex flex-col gap-3">
+  1004→                {['Terms of Service', 'Privacy Policy', 'Risk Disclosure', 'Cookie Policy'].map((link) => (
+  1005→                  <li key={link}>
+  1006→                    <span
+  1007→                      className="text-sm cursor-pointer transition-colors duration-200"
+  1008→                      style={{ color: C.textMuted }}
+  1009→                    >
+  1010→                      {link}
+  1011→                    </span>
+  1012→                  </li>
+  1013→                ))}
+  1014→              </ul>
+  1015→            </div>
+  1016→          </div>
+  1017→
+  1018→          {/* Disclaimer */}
+  1019→          <div className="pt-8 mb-8" style={{ borderTop: `1px solid ${C.border}` }}>
+  1020→            <p className="text-xs leading-relaxed" style={{ color: C.textMuted }}>
+  1021→              All trading activity takes place in a simulated trading environment using virtual funds and
+  1022→              does not involve real-market execution or real capital. Past performance is not indicative of
+  1023→              future results. Trading involves substantial risk and is not suitable for every investor.
+  1024→            </p>
+  1025→          </div>
+  1026→
+  1027→          {/* Bottom */}
+  1028→          <div
+  1029→            className="pt-6 flex flex-col sm:flex-row items-center justify-between gap-4"
+  1030→            style={{ borderTop: `1px solid ${C.border}` }}
+  1031→          >
+  1032→            <p className="text-xs" style={{ color: C.textMuted }}>
+  1033→              &copy; {new Date().getFullYear()} NexTrade Pro. All rights reserved.
+  1034→            </p>
+  1035→            <div className="flex items-center gap-4">
+  1036→              <button
+  1037→                className="flex items-center gap-2.5 px-4 py-2.5 rounded-lg cursor-pointer transition-all duration-200 hover:scale-[1.02]"
+  1038→                style={{
+  1039→                  background: C.bgCard,
+  1040→                  border: `1px solid ${C.border}`,
+  1041→                }}
+  1042→              >
+  1043→                <svg viewBox="0 0 24 24" width="18" height="18" fill="white">
+  1044→                  <path d="M3.609 1.814L13.792 12 3.61 22.186a.996.996 0 01-.61-.92V2.734a1 1 0 01.609-.92zm10.89 10.893l2.302 2.302-10.937 6.333 8.635-8.635zm3.199-3.199l2.302 2.302a1 1 0 010 1.38l-2.302 2.302L15.5 13.11l2.198-2.602zM5.864 2.658L16.8 8.99l-2.302 2.303-8.634-8.635z" />
+  1045→                </svg>
+  1046→                <div className="text-left">
+  1047→                  <p className="text-[9px] leading-none" style={{ color: C.textMuted }}>GET IT ON</p>
+  1048→                  <p className="text-xs font-semibold" style={{ color: C.textPrimary }}>Google Play</p>
+  1049→                </div>
+  1050→              </button>
+  1051→              <button
+  1052→                className="flex items-center gap-2.5 px-4 py-2.5 rounded-lg cursor-pointer transition-all duration-200 hover:scale-[1.02]"
+  1053→                style={{
+  1054→                  background: C.bgCard,
+  1055→                  border: `1px solid ${C.border}`,
+  1056→                }}
+  1057→              >
+  1058→                <svg viewBox="0 0 24 24" width="18" height="18" fill="white">
+  1059→                  <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z" />
+  1060→                </svg>
+  1061→                <div className="text-left">
+  1062→                  <p className="text-[9px] leading-none" style={{ color: C.textMuted }}>Download on the</p>
+  1063→                  <p className="text-xs font-semibold" style={{ color: C.textPrimary }}>App Store</p>
+  1064→                </div>
+  1065→              </button>
+  1066→            </div>
+  1067→          </div>
+  1068→        </div>
+  1069→      </footer>
+  1070→    </div>
+  1071→  );
+  1072→}

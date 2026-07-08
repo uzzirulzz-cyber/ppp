@@ -4,7 +4,8 @@ import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard,
-  CandlestickChart,
+  TrendingUp,
+  Eye,
   Wallet,
   User,
   Shield,
@@ -22,6 +23,11 @@ import {
   BellRing,
   FileText,
   Ticket,
+  Home,
+  History,
+  CircleDollarSign,
+  Lock,
+  Coins,
 } from 'lucide-react';
 import Image from 'next/image';
 import { useStore, Pages, type PageType } from '@/store/useStore';
@@ -39,23 +45,31 @@ interface NavSection {
 }
 
 const mainItems: NavItem[] = [
+  { icon: <Home size={20} />, label: 'Home', page: Pages.HOME },
   { icon: <LayoutDashboard size={20} />, label: 'Dashboard', page: Pages.DASHBOARD },
-  { icon: <CandlestickChart size={20} />, label: 'Trading', page: Pages.TRADING },
+  { icon: <TrendingUp size={20} />, label: 'Markets', page: Pages.MARKETS },
+  { icon: <Eye size={20} />, label: 'Watchlist', page: Pages.WATCHLIST },
+  { icon: <Coins size={20} />, label: 'Trade', page: Pages.TRADING },
   { icon: <Wallet size={20} />, label: 'Wallet', page: Pages.WALLET },
+  { icon: <CircleDollarSign size={20} />, label: 'Assets', page: Pages.ASSETS },
+  { icon: <History size={20} />, label: 'History', page: Pages.HISTORY },
 ];
 
 const accountItems: NavItem[] = [
   { icon: <User size={20} />, label: 'Profile', page: Pages.PROFILE },
   { icon: <Shield size={20} />, label: 'Security', page: Pages.SECURITY },
   { icon: <Bell size={20} />, label: 'Notifications', page: Pages.NOTIFICATIONS },
+  { icon: <Settings size={20} />, label: 'Settings', page: Pages.SETTINGS },
   { icon: <Gift size={20} />, label: 'Referral', page: Pages.REFERRAL },
 ];
 
 const adminItems: NavItem[] = [
+  { icon: <LayoutDashboard size={20} />, label: 'Dashboard', page: Pages.ADMIN_DASHBOARD },
   { icon: <Users size={20} />, label: 'Users', page: Pages.ADMIN_USERS },
   { icon: <UserCog size={20} />, label: 'Agents', page: Pages.ADMIN_AGENTS },
   { icon: <ArrowLeftRight size={20} />, label: 'Trades', page: Pages.ADMIN_TRADES },
   { icon: <WalletCards size={20} />, label: 'Wallets', page: Pages.ADMIN_WALLETS },
+  { icon: <DollarSign size={20} />, label: 'Withdrawals', page: Pages.ADMIN_WITHDRAWALS },
   { icon: <BarChart3 size={20} />, label: 'Analytics', page: Pages.ADMIN_ANALYTICS },
   { icon: <DollarSign size={20} />, label: 'Commissions', page: Pages.ADMIN_COMMISSIONS },
   { icon: <AlertTriangle size={20} />, label: 'Risk', page: Pages.ADMIN_RISK },
@@ -73,7 +87,6 @@ const sections: NavSection[] = [
 
 export default function Sidebar() {
   const { currentPage, sidebarOpen, user, navigate, logout } = useStore();
-
   const isAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'SUB_AGENT';
 
   return (
@@ -86,11 +99,11 @@ export default function Sidebar() {
       {/* Logo */}
       <div
         className="flex items-center gap-3 px-4 py-5 border-b"
-        style={{ borderColor: 'rgba(192, 199, 209, 0.1)' }}
+        style={{ borderColor: 'var(--border-color)' }}
       >
         <Image
           src="/logo.png"
-          alt="NexTrade Pro"
+          alt="Brock Exchange"
           width={36}
           height={36}
           style={{ borderRadius: 8, objectFit: 'cover', flexShrink: 0 }}
@@ -104,8 +117,8 @@ export default function Sidebar() {
               transition={{ duration: 0.2 }}
               style={{ overflow: 'hidden', whiteSpace: 'nowrap' }}
             >
-              <span style={{ fontSize: 18, fontWeight: 700, color: '#FFFFFF', fontFamily: "var(--font-poppins), 'Poppins', sans-serif" }}>
-                NexTrade <span style={{ color: '#FFD700' }}>Pro</span>
+              <span style={{ fontSize: 18, fontWeight: 700, color: '#FFFFFF' }}>
+                Brock <span style={{ color: 'var(--accent-gold)' }}>Exchange</span>
               </span>
             </motion.div>
           )}
@@ -113,10 +126,7 @@ export default function Sidebar() {
       </div>
 
       {/* Navigation */}
-      <nav
-        className="flex-1 overflow-y-auto py-3"
-        style={{ overflowX: 'hidden' }}
-      >
+      <nav className="flex-1 overflow-y-auto py-3" style={{ overflowX: 'hidden' }}>
         {sections.map((section) => {
           if (section.adminOnly && !isAdmin) return null;
 
@@ -144,11 +154,7 @@ export default function Sidebar() {
               {!sidebarOpen && section.title === 'Main' && (
                 <div
                   className="mx-auto my-2"
-                  style={{
-                    width: 24,
-                    height: 1,
-                    background: 'var(--border-color)',
-                  }}
+                  style={{ width: 24, height: 1, background: 'var(--border-color)' }}
                 />
               )}
               {section.items.map((item) => {
@@ -189,10 +195,7 @@ export default function Sidebar() {
       </nav>
 
       {/* Logout */}
-      <div
-        className="border-t px-2 py-3"
-        style={{ borderColor: 'var(--border-color)' }}
-      >
+      <div className="border-t px-2 py-3" style={{ borderColor: 'var(--border-color)' }}>
         <div
           className="sidebar-item"
           onClick={logout}

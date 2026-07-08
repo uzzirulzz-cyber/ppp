@@ -1,0 +1,938 @@
+     1→     1→'use client';
+     2→     2→
+     3→     3→import React from 'react';
+     4→     4→import { motion } from 'framer-motion';
+     5→     5→import {
+     6→     6→  Wallet,
+     7→     7→  Shield,
+     8→     8→  Zap,
+     9→     9→  TrendingUp,
+    10→    10→  Users,
+    11→    11→  Lock,
+    12→    12→  ArrowUpRight,
+    13→    13→} from 'lucide-react';
+    14→    14→import { useRouter } from 'next/navigation';
+    15→    15→import Image from 'next/image';
+    16→    16→
+    17→    17→/* ─── Animated Gradient Orbs ─── */
+    18→    18→function GradientOrbs() {
+    19→    19→  const orbs = [
+    20→    20→    { cx: '20%', cy: '15%', r: 220, color: 'rgba(59, 130, 246, 0.07)', delay: 0, duration: 10 },
+    21→    21→    { cx: '75%', cy: '25%', r: 180, color: 'rgba(99, 102, 241, 0.05)', delay: 2, duration: 12 },
+    22→    22→    { cx: '60%', cy: '70%', r: 250, color: 'rgba(59, 130, 246, 0.04)', delay: 4, duration: 14 },
+    23→    23→    { cx: '10%', cy: '80%', r: 160, color: 'rgba(99, 102, 241, 0.06)', delay: 1, duration: 11 },
+    24→    24→  ];
+    25→    25→
+    26→    26→  return (
+    27→    27→    <div className="absolute inset-0 overflow-hidden pointer-events-none">
+    28→    28→      {orbs.map((o, i) => (
+    29→    29→        <motion.div
+    30→    30→          key={i}
+    31→    31→          className="absolute rounded-full"
+    32→    32→          style={{
+    33→    33→            left: o.cx,
+    34→    34→            top: o.cy,
+    35→    35→            width: o.r,
+    36→    36→            height: o.r,
+    37→    37→            background: `radial-gradient(circle, ${o.color} 0%, transparent 70%)`,
+    38→    38→            x: '-50%',
+    39→    39→            y: '-50%',
+    40→    40→          }}
+    41→    41→          animate={{
+    42→    42→            scale: [1, 1.3, 1],
+    43→    43→            opacity: [0.6, 1, 0.6],
+    44→    44→            x: ['-50%', '-45%', '-50%'],
+    45→    45→            y: ['-50%', '-55%', '-50%'],
+    46→    46→          }}
+    47→    47→          transition={{
+    48→    48→            duration: o.duration,
+    49→    49→            repeat: Infinity,
+    50→    50→            delay: o.delay,
+    51→    51→            ease: 'easeInOut',
+    52→    52→          }}
+    53→    53→        />
+    54→    54→      ))}
+    55→    55→    </div>
+    56→    56→  );
+    57→    57→}
+    58→    58→
+    59→    59→/* ─── Subtle Grid Pattern ─── */
+    60→    60→function GridPattern() {
+    61→    61→  return (
+    62→    62→    <div
+    63→    63→      className="absolute inset-0 pointer-events-none"
+    64→    64→      style={{
+    65→    65→        backgroundImage:
+    66→    66→          'linear-gradient(rgba(161,161,170,0.025) 1px, transparent 1px), linear-gradient(90deg, rgba(161,161,170,0.025) 1px, transparent 1px)',
+    67→    67→        backgroundSize: '60px 60px',
+    68→    68→      }}
+    69→    69→    />
+    70→    70→  );
+    71→    71→}
+    72→    72→
+    73→    73→/* ─── Sparkline Visual ─── */
+    74→    74→function Sparkline({ positive }: { positive: boolean }) {
+    75→    75→  const color = positive ? '#22C55E' : '#EF4444';
+    76→    76→  const grad = positive
+    77→    77→    ? 'linear-gradient(to right, rgba(34,197,94,0.0) 0%, rgba(34,197,94,0.25) 100%)'
+    78→    78→    : 'linear-gradient(to right, rgba(239,68,68,0.25) 0%, rgba(239,68,68,0.0) 100%)';
+    79→    79→
+    80→    80→  const points = positive
+    81→    81→    ? '0,18 8,16 16,19 24,12 32,14 40,8 48,10 56,4 64,6 72,2 80,5'
+    82→    82→    : '0,4 8,6 16,2 24,8 32,5 40,12 48,10 56,16 64,14 72,18 80,20';
+    83→    83→
+    84→    84→  return (
+    85→    85→    <div
+    86→    86→      style={{
+    87→    87→        position: 'relative',
+    88→    88→        width: 80,
+    89→    89→        height: 24,
+    90→    90→        background: grad,
+    91→    91→        borderRadius: 4,
+    92→    92→        overflow: 'hidden',
+    93→    93→      }}
+    94→    94→    >
+    95→    95→      <svg
+    96→    96→        viewBox="0 0 80 24"
+    97→    97→        width="80"
+    98→    98→        height="24"
+    99→    99→        fill="none"
+   100→   100→        style={{ position: 'absolute', top: 0, left: 0 }}
+   101→   101→      >
+   102→   102→        <polyline
+   103→   103→          points={points}
+   104→   104→          stroke={color}
+   105→   105→          strokeWidth="1.5"
+   106→   106→          strokeLinecap="round"
+   107→   107→          strokeLinejoin="round"
+   108→   108→        />
+   109→   109→      </svg>
+   110→   110→    </div>
+   111→   111→  );
+   112→   112→}
+   113→   113→
+   114→   114→/* ─── Market Data ─── */
+   115→   115→const MARKETS = [
+   116→   116→  { pair: 'BTC/USDT', price: '$67,245.00', change: '+2.35%', positive: true },
+   117→   117→  { pair: 'ETH/USDT', price: '$3,456.78', change: '+1.82%', positive: true },
+   118→   118→  { pair: 'SOL/USDT', price: '$178.92', change: '+4.21%', positive: true },
+   119→   119→  { pair: 'BNB/USDT', price: '$589.40', change: '-0.94%', positive: false },
+   120→   120→  { pair: 'XRP/USDT', price: '$0.6234', change: '-1.37%', positive: false },
+   121→   121→  { pair: 'DOGE/USDT', price: '$0.1523', change: '+6.12%', positive: true },
+   122→   122→];
+   123→   123→
+   124→   124→/* ─── Features Data ─── */
+   125→   125→const FEATURES = [
+   126→   126→  {
+   127→   127→    icon: Shield,
+   128→   128→    title: 'Bank-Grade Security',
+   129→   129→    desc: '256-bit encryption, 2FA, and institutional-grade fund protection.',
+   130→   130→    color: '#22C55E',
+   131→   131→    bg: 'rgba(34,197,94,0.08)',
+   132→   132→    border: 'rgba(34,197,94,0.15)',
+   133→   133→  },
+   134→   134→  {
+   135→   135→    icon: Zap,
+   136→   136→    title: 'Instant Transfers',
+   137→   137→    desc: 'Deposit and withdraw via JazzCash, Easypaisa, Bank Transfer, and cards.',
+   138→   138→    color: '#F97316',
+   139→   139→    bg: 'rgba(249,115,22,0.08)',
+   140→   140→    border: 'rgba(249,115,22,0.15)',
+   141→   141→  },
+   142→   142→  {
+   143→   143→    icon: TrendingUp,
+   144→   144→    title: 'Real-Time Trading',
+   145→   145→    desc: 'Trade BTC, ETH, SOL and more with real-time charts and instant execution.',
+   146→   146→    color: '#3B82F6',
+   147→   147→    bg: 'rgba(59,130,246,0.08)',
+   148→   148→    border: 'rgba(59,130,246,0.15)',
+   149→   149→  },
+   150→   150→  {
+   151→   151→    icon: Users,
+   152→   152→    title: 'Referral Rewards',
+   153→   153→    desc: 'Earn commissions by inviting friends. Multi-tier referral system.',
+   154→   154→    color: '#FACC15',
+   155→   155→    bg: 'rgba(250,204,21,0.08)',
+   156→   156→    border: 'rgba(250,204,21,0.15)',
+   157→   157→  },
+   158→   158→];
+   159→   159→
+   160→   160→/* ─── Payment Methods ─── */
+   161→   161→const PAYMENTS = [
+   162→   162→  { name: 'JazzCash', color: '#E4002B', icon: '💳' },
+   163→   163→  { name: 'Easypaisa', color: '#36B37E', icon: '💰' },
+   164→   164→  { name: 'Bank Transfer', color: '#3B82F6', icon: '🏦' },
+   165→   165→  { name: 'Visa', color: '#1A1F71', icon: '💎' },
+   166→   166→  { name: 'Mastercard', color: '#EB001B', icon: '🔴' },
+   167→   167→];
+   168→   168→
+   169→   169→/* ─── Animation Variants ─── */
+   170→   170→const fadeUp = {
+   171→   171→  hidden: { opacity: 0, y: 20 },
+   172→   172→  visible: (i: number) => ({
+   173→   173→    opacity: 1,
+   174→   174→    y: 0,
+   175→   175→    transition: { delay: i * 0.08, duration: 0.5, ease: 'easeOut' as const },
+   176→   176→  }),
+   177→   177→};
+   178→   178→
+   179→   179→const staggerContainer = {
+   180→   180→  hidden: {},
+   181→   181→  visible: { transition: { staggerChildren: 0.08 } },
+   182→   182→};
+   183→   183→
+   184→   184→/* ══════════════════════════════════════════════════════════════
+   185→   185→   MAIN: HomePage
+   186→   186→   ══════════════════════════════════════════════════════════════ */
+   187→   187→export default function HomePage() {
+   188→   188→  const router = useRouter();
+   189→   189→
+   190→   190→  return (
+   191→   191→    <div
+   192→   192→      style={{
+   193→   193→        height: '100vh',
+   194→   194→        overflowY: 'auto',
+   195→   195→        overflowX: 'hidden',
+   196→   196→        background: 'var(--bg-primary)',
+   197→   197→        position: 'relative',
+   198→   198→        WebkitOverflowScrolling: 'touch',
+   199→   199→      }}
+   200→   200→    >
+   201→   201→      <GradientOrbs />
+   202→   202→      <GridPattern />
+   203→   203→
+   204→   204→      {/* ─────────────── SECTION 1: HERO ─────────────── */}
+   205→   205→      <section
+   206→   206→        style={{
+   207→   207→          position: 'relative',
+   208→   208→          zIndex: 1,
+   209→   209→          display: 'flex',
+   210→   210→          flexDirection: 'column',
+   211→   211→          alignItems: 'center',
+   212→   212→          justifyContent: 'center',
+   213→   213→          minHeight: '100vh',
+   214→   214→          padding: '60px 24px 80px',
+   215→   215→          textAlign: 'center',
+   216→   216→        }}
+   217→   217→      >
+   218→   218→        {/* Logo */}
+   219→   219→        <motion.div
+   220→   220→          initial={{ opacity: 0, y: -10 }}
+   221→   221→          animate={{ opacity: 1, y: 0 }}
+   222→   222→          transition={{ duration: 0.5 }}
+   223→   223→          style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 32 }}
+   224→   224→        >
+   225→   225→          <div
+   226→   226→            style={{
+   227→   227→              width: 44,
+   228→   228→              height: 44,
+   229→   229→              borderRadius: 12,
+   230→   230→              overflow: 'hidden',
+   231→   231→              flexShrink: 0,
+   232→   232→            }}
+   233→   233→          >
+   234→   234→            <Image src="/logo-admin.png" alt="NexTrade Pro" width={44} height={44} style={{ objectFit: 'cover' }} />
+   235→   235→          </div>
+   236→   236→          <span
+   237→   237→            style={{
+   238→   238→              fontSize: 22,
+   239→   239→              fontWeight: 700,
+   240→   240→              color: '#FAFAFA',
+   241→   241→              fontFamily: "var(--font-poppins), 'Poppins', sans-serif",
+   242→   242→              letterSpacing: '-0.02em',
+   243→   243→            }}
+   244→   244→          >
+   245→   245→            NexTrade Pro
+   246→   246→          </span>
+   247→   247→        </motion.div>
+   248→   248→
+   249→   249→        {/* Badge */}
+   250→   250→        <motion.div
+   251→   251→          initial={{ opacity: 0, scale: 0.9 }}
+   252→   252→          animate={{ opacity: 1, scale: 1 }}
+   253→   253→          transition={{ delay: 0.15, duration: 0.4 }}
+   254→   254→          style={{
+   255→   255→            display: 'inline-flex',
+   256→   256→            alignItems: 'center',
+   257→   257→            gap: 8,
+   258→   258→            padding: '6px 16px',
+   259→   259→            borderRadius: 9999,
+   260→   260→            background: 'rgba(59,130,246,0.08)',
+   261→   261→            border: '1px solid rgba(59,130,246,0.15)',
+   262→   262→            marginBottom: 24,
+   263→   263→          }}
+   264→   264→        >
+   265→   265→          <span
+   266→   266→            style={{
+   267→   267→              width: 6,
+   268→   268→              height: 6,
+   269→   269→              borderRadius: '50%',
+   270→   270→              background: '#4ade80',
+   271→   271→              animation: 'pulse-glow 2s infinite',
+   272→   272→            }}
+   273→   273→          />
+   274→   274→          <span
+   275→   275→            style={{
+   276→   276→              fontSize: 12,
+   277→   277→              fontWeight: 600,
+   278→   278→              color: '#60A5FA',
+   279→   279→              letterSpacing: '0.04em',
+   280→   280→            }}
+   281→   281→          >
+   282→   282→            LIVE MARKETS
+   283→   283→          </span>
+   284→   284→        </motion.div>
+   285→   285→
+   286→   286→        {/* Tagline */}
+   287→   287→        <motion.h1
+   288→   288→          initial={{ opacity: 0, y: 15 }}
+   289→   289→          animate={{ opacity: 1, y: 0 }}
+   290→   290→          transition={{ delay: 0.2, duration: 0.6 }}
+   291→   291→          style={{
+   292→   292→            fontSize: 36,
+   293→   293→            fontWeight: 800,
+   294→   294→            lineHeight: 1.15,
+   295→   295→            color: '#FAFAFA',
+   296→   296→            letterSpacing: '-0.03em',
+   297→   297→            fontFamily: "var(--font-poppins), 'Poppins', sans-serif",
+   298→   298→            marginBottom: 16,
+   299→   299→            maxWidth: 420,
+   300→   300→          }}
+   301→   301→        >
+   302→   302→          Trade Smarter.{' '}
+   303→   303→          <span className="gradient-text">Pay Faster.</span>
+   304→   304→          <br />
+   305→   305→          Grow Wealth.
+   306→   306→        </motion.h1>
+   307→   307→
+   308→   308→        {/* Subtitle */}
+   309→   309→        <motion.p
+   310→   310→          initial={{ opacity: 0, y: 10 }}
+   311→   311→          animate={{ opacity: 1, y: 0 }}
+   312→   312→          transition={{ delay: 0.35, duration: 0.5 }}
+   313→   313→          style={{
+   314→   314→            fontSize: 15,
+   315→   315→            lineHeight: 1.6,
+   316→   316→            color: '#A1A1AA',
+   317→   317→            maxWidth: 360,
+   318→   318→            marginBottom: 40,
+   319→   319→          }}
+   320→   320→        >
+   321→   321→          Pakistan&apos;s premier digital trading &amp; payment platform with
+   322→   322→          institutional-grade security.
+   323→   323→        </motion.p>
+   324→   324→
+   325→   325→        {/* CTA Buttons */}
+   326→   326→        <motion.div
+   327→   327→          initial={{ opacity: 0, y: 10 }}
+   328→   328→          animate={{ opacity: 1, y: 0 }}
+   329→   329→          transition={{ delay: 0.5, duration: 0.5 }}
+   330→   330→          style={{ display: 'flex', gap: 12, width: '100%', maxWidth: 340 }}
+   331→   331→        >
+   332→   332→          <button
+   333→   333→            className="btn-primary"
+   334→   334→            onClick={() => router.push('/signin')}
+   335→   335→            style={{
+   336→   336→              flex: 1,
+   337→   337→              display: 'flex',
+   338→   338→              alignItems: 'center',
+   339→   339→              justifyContent: 'center',
+   340→   340→              gap: 8,
+   341→   341→              padding: '14px 20px',
+   342→   342→              fontSize: 15,
+   343→   343→              fontFamily: "var(--font-poppins), 'Poppins', sans-serif",
+   344→   344→            }}
+   345→   345→          >
+   346→   346→            Sign In
+   347→   347→          </button>
+   348→   348→          <button
+   349→   349→            className="btn-secondary"
+   350→   350→            onClick={() => router.push('/signin?tab=register')}
+   351→   351→            style={{
+   352→   352→              flex: 1,
+   353→   353→              display: 'flex',
+   354→   354→              alignItems: 'center',
+   355→   355→              justifyContent: 'center',
+   356→   356→              gap: 8,
+   357→   357→              padding: '14px 20px',
+   358→   358→              fontSize: 15,
+   359→   359→              fontFamily: "var(--font-poppins), 'Poppins', sans-serif",
+   360→   360→            }}
+   361→   361→          >
+   362→   362→            Create Account
+   363→   363→          </button>
+   364→   364→        </motion.div>
+   365→   365→
+   366→   366→        {/* Scroll hint */}
+   367→   367→        <motion.div
+   368→   368→          initial={{ opacity: 0 }}
+   369→   369→          animate={{ opacity: 1 }}
+   370→   370→          transition={{ delay: 1, duration: 0.8 }}
+   371→   371→          style={{
+   372→   372→            position: 'absolute',
+   373→   373→            bottom: 32,
+   374→   374→            left: '50%',
+   375→   375→            transform: 'translateX(-50%)',
+   376→   376→          }}
+   377→   377→        >
+   378→   378→          <motion.div
+   379→   379→            animate={{ y: [0, 6, 0] }}
+   380→   380→            transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+   381→   381→            style={{
+   382→   382→              width: 24,
+   383→   383→              height: 40,
+   384→   384→              borderRadius: 12,
+   385→   385→              border: '2px solid rgba(113,113,122,0.3)',
+   386→   386→              display: 'flex',
+   387→   387→              justifyContent: 'center',
+   388→   388→              paddingTop: 8,
+   389→   389→            }}
+   390→   390→          >
+   391→   391→            <motion.div
+   392→   392→              animate={{ opacity: [1, 0.3, 1], y: [0, 8, 0] }}
+   393→   393→              transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+   394→   394→              style={{
+   395→   395→                width: 3,
+   396→   396→                height: 8,
+   397→   397→                borderRadius: 2,
+   398→   398→                background: 'rgba(113,113,122,0.5)',
+   399→   399→              }}
+   400→   400→            />
+   401→   401→          </motion.div>
+   402→   402→        </motion.div>
+   403→   403→      </section>
+   404→   404→
+   405→   405→      {/* ─────────────── SECTION 2: MARKET OVERVIEW ─────────────── */}
+   406→   406→      <section
+   407→   407→        style={{
+   408→   408→          position: 'relative',
+   409→   409→          zIndex: 1,
+   410→   410→          padding: '40px 20px 60px',
+   411→   411→        }}
+   412→   412→      >
+   413→   413→        {/* Section Title */}
+   414→   414→        <motion.div
+   415→   415→          initial="hidden"
+   416→   416→          whileInView="visible"
+   417→   417→          viewport={{ once: true, margin: '-40px' }}
+   418→   418→          variants={staggerContainer}
+   419→   419→          style={{ marginBottom: 20 }}
+   420→   420→        >
+   421→   421→          <motion.div
+   422→   422→            variants={fadeUp}
+   423→   423→            custom={0}
+   424→   424→            style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}
+   425→   425→          >
+   426→   426→            <TrendingUp size={16} color="#3B82F6" />
+   427→   427→            <span
+   428→   428→              style={{
+   429→   429→                fontSize: 11,
+   430→   430→                fontWeight: 600,
+   431→   431→                color: '#3B82F6',
+   432→   432→                letterSpacing: '0.08em',
+   433→   433→                textTransform: 'uppercase',
+   434→   434→              }}
+   435→   435→            >
+   436→   436→              Live Data
+   437→   437→            </span>
+   438→   438→          </motion.div>
+   439→   439→          <motion.h2
+   440→   440→            variants={fadeUp}
+   441→   441→            custom={1}
+   442→   442→            style={{
+   443→   443→              fontSize: 22,
+   444→   444→              fontWeight: 700,
+   445→   445→              color: '#FAFAFA',
+   446→   446→              fontFamily: "var(--font-poppins), 'Poppins', sans-serif",
+   447→   447→              letterSpacing: '-0.02em',
+   448→   448→            }}
+   449→   449→          >
+   450→   450→            Market Overview
+   451→   451→          </motion.h2>
+   452→   452→        </motion.div>
+   453→   453→
+   454→   454→        {/* Market Cards Grid */}
+   455→   455→        <motion.div
+   456→   456→          initial="hidden"
+   457→   457→          whileInView="visible"
+   458→   458→          viewport={{ once: true, margin: '-20px' }}
+   459→   459→          variants={staggerContainer}
+   460→   460→          style={{
+   461→   461→            display: 'grid',
+   462→   462→            gridTemplateColumns: '1fr 1fr',
+   463→   463→            gap: 10,
+   464→   464→          }}
+   465→   465→        >
+   466→   466→          {MARKETS.map((m, i) => (
+   467→   467→            <motion.div
+   468→   468→              key={m.pair}
+   469→   469→              variants={fadeUp}
+   470→   470→              custom={i}
+   471→   471→              className="glass-card card-shine"
+   472→   472→              whileHover={{ borderColor: 'rgba(63,63,70,0.6)' }}
+   473→   473→              style={{ padding: 14, cursor: 'pointer' }}
+   474→   474→            >
+   475→   475→              {/* Pair + Sparkline row */}
+   476→   476→              <div
+   477→   477→                style={{
+   478→   478→                  display: 'flex',
+   479→   479→                  justifyContent: 'space-between',
+   480→   480→                  alignItems: 'flex-start',
+   481→   481→                  marginBottom: 10,
+   482→   482→                }}
+   483→   483→              >
+   484→   484→                <div>
+   485→   485→                  <div
+   486→   486→                    style={{
+   487→   487→                      fontSize: 13,
+   488→   488→                      fontWeight: 600,
+   489→   489→                      color: '#FAFAFA',
+   490→   490→                      fontFamily: "var(--font-poppins), 'Poppins', sans-serif",
+   491→   491→                    }}
+   492→   492→                  >
+   493→   493→                    {m.pair}
+   494→   494→                  </div>
+   495→   495→                </div>
+   496→   496→                <Sparkline positive={m.positive} />
+   497→   497→              </div>
+   498→   498→
+   499→   499→              {/* Price */}
+   500→   500→              <div
+   501→   501→                style={{
+   502→   502→                  fontSize: 18,
+   503→   503→                  fontWeight: 700,
+   504→   504→                  color: '#FAFAFA',
+   505→   505→                  fontFamily: "var(--font-poppins), 'Poppins', sans-serif",
+   506→   506→                  marginBottom: 4,
+   507→   507→                  letterSpacing: '-0.01em',
+   508→   508→                }}
+   509→   509→              >
+   510→   510→                {m.price}
+   511→   511→              </div>
+   512→   512→
+   513→   513→              {/* Change */}
+   514→   514→              <span
+   515→   515→                className={m.positive ? 'badge-green' : 'badge-red'}
+   516→   516→                style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px' }}
+   517→   517→              >
+   518→   518→                <ArrowUpRight
+   519→   519→                  size={11}
+   520→   520→                  style={{
+   521→   521→                    display: 'inline',
+   522→   522→                    verticalAlign: 'middle',
+   523→   523→                    marginRight: 2,
+   524→   524→                    transform: m.positive ? 'none' : 'rotate(90deg)',
+   525→   525→                  }}
+   526→   526→                />
+   527→   527→                {m.change}
+   528→   528→              </span>
+   529→   529→            </motion.div>
+   530→   530→          ))}
+   531→   531→        </motion.div>
+   532→   532→      </section>
+   533→   533→
+   534→   534→      {/* ─────────────── SECTION 3: FEATURES ─────────────── */}
+   535→   535→      <section
+   536→   536→        style={{
+   537→   537→          position: 'relative',
+   538→   538→          zIndex: 1,
+   539→   539→          padding: '40px 20px 60px',
+   540→   540→        }}
+   541→   541→      >
+   542→   542→        {/* Section Title */}
+   543→   543→        <motion.div
+   544→   544→          initial="hidden"
+   545→   545→          whileInView="visible"
+   546→   546→          viewport={{ once: true, margin: '-40px' }}
+   547→   547→          variants={staggerContainer}
+   548→   548→          style={{ marginBottom: 20 }}
+   549→   549→        >
+   550→   550→          <motion.h2
+   551→   551→            variants={fadeUp}
+   552→   552→            custom={0}
+   553→   553→            style={{
+   554→   554→              fontSize: 22,
+   555→   555→              fontWeight: 700,
+   556→   556→              color: '#FAFAFA',
+   557→   557→              fontFamily: "var(--font-poppins), 'Poppins', sans-serif",
+   558→   558→              letterSpacing: '-0.02em',
+   559→   559→            }}
+   560→   560→          >
+   561→   561→            Why NexTrade Pro?
+   562→   562→          </motion.h2>
+   563→   563→          <motion.p
+   564→   564→            variants={fadeUp}
+   565→   565→            custom={1}
+   566→   566→            style={{ fontSize: 14, color: '#71717A', marginTop: 6, lineHeight: 1.5 }}
+   567→   567→          >
+   568→   568→            Built for traders who demand the best.
+   569→   569→          </motion.p>
+   570→   570→        </motion.div>
+   571→   571→
+   572→   572→        {/* Features Grid */}
+   573→   573→        <motion.div
+   574→   574→          initial="hidden"
+   575→   575→          whileInView="visible"
+   576→   576→          viewport={{ once: true, margin: '-20px' }}
+   577→   577→          variants={staggerContainer}
+   578→   578→          style={{
+   579→   579→            display: 'grid',
+   580→   580→            gridTemplateColumns: '1fr 1fr',
+   581→   581→            gap: 10,
+   582→   582→          }}
+   583→   583→        >
+   584→   584→          {FEATURES.map((f, i) => (
+   585→   585→            <motion.div
+   586→   586→              key={f.title}
+   587→   587→              variants={fadeUp}
+   588→   588→              custom={i}
+   589→   589→              className="glass-card"
+   590→   590→              whileHover={{
+   591→   591→                borderColor: f.border,
+   592→   592→                y: -2,
+   593→   593→              }}
+   594→   594→              style={{ padding: 18, transition: 'all 0.2s ease', cursor: 'default' }}
+   595→   595→            >
+   596→   596→              {/* Icon */}
+   597→   597→              <div
+   598→   598→                style={{
+   599→   599→                  width: 40,
+   600→   600→                  height: 40,
+   601→   601→                  borderRadius: 10,
+   602→   602→                  background: f.bg,
+   603→   603→                  border: `1px solid ${f.border}`,
+   604→   604→                  display: 'flex',
+   605→   605→                  alignItems: 'center',
+   606→   606→                  justifyContent: 'center',
+   607→   607→                  marginBottom: 14,
+   608→   608→                }}
+   609→   609→              >
+   610→   610→                <f.icon size={20} color={f.color} />
+   611→   611→              </div>
+   612→   612→
+   613→   613→              {/* Title */}
+   614→   614→              <div
+   615→   615→                style={{
+   616→   616→                  fontSize: 14,
+   617→   617→                  fontWeight: 700,
+   618→   618→                  color: '#FAFAFA',
+   619→   619→                  fontFamily: "var(--font-poppins), 'Poppins', sans-serif",
+   620→   620→                  marginBottom: 6,
+   621→   621→                  lineHeight: 1.3,
+   622→   622→                }}
+   623→   623→              >
+   624→   624→                {f.title}
+   625→   625→              </div>
+   626→   626→
+   627→   627→              {/* Description */}
+   628→   628→              <div
+   629→   629→                style={{
+   630→   630→                  fontSize: 12,
+   631→   631→                  color: '#71717A',
+   632→   632→                  lineHeight: 1.6,
+   633→   633→                }}
+   634→   634→              >
+   635→   635→                {f.desc}
+   636→   636→              </div>
+   637→   637→            </motion.div>
+   638→   638→          ))}
+   639→   639→        </motion.div>
+   640→   640→      </section>
+   641→   641→
+   642→   642→      {/* ─────────────── SECTION 4: PAYMENT METHODS ─────────────── */}
+   643→   643→      <section
+   644→   644→        style={{
+   645→   645→          position: 'relative',
+   646→   646→          zIndex: 1,
+   647→   647→          padding: '40px 20px 60px',
+   648→   648→        }}
+   649→   649→      >
+   650→   650→        <motion.div
+   651→   651→          initial="hidden"
+   652→   652→          whileInView="visible"
+   653→   653→          viewport={{ once: true, margin: '-40px' }}
+   654→   654→          variants={staggerContainer}
+   655→   655→        >
+   656→   656→          <motion.h2
+   657→   657→            variants={fadeUp}
+   658→   658→            custom={0}
+   659→   659→            style={{
+   660→   660→              fontSize: 22,
+   661→   661→              fontWeight: 700,
+   662→   662→              color: '#FAFAFA',
+   663→   663→              fontFamily: "var(--font-poppins), 'Poppins', sans-serif",
+   664→   664→              letterSpacing: '-0.02em',
+   665→   665→              marginBottom: 16,
+   666→   666→            }}
+   667→   667→          >
+   668→   668→            Supported Payment Methods
+   669→   669→          </motion.h2>
+   670→   670→
+   671→   671→          <motion.div
+   672→   672→            variants={fadeUp}
+   673→   673→            custom={1}
+   674→   674→            style={{
+   675→   675→              display: 'flex',
+   676→   676→              gap: 10,
+   677→   677→              overflowX: 'auto',
+   678→   678→              paddingBottom: 4,
+   679→   679→              scrollbarWidth: 'none',
+   680→   680→              msOverflowStyle: 'none',
+   681→   681→            }}
+   682→   682→          >
+   683→   683→            {PAYMENTS.map((p) => (
+   684→   684→              <div
+   685→   685→                key={p.name}
+   686→   686→                className="glass-card"
+   687→   687→                style={{
+   688→   688→                  flexShrink: 0,
+   689→   689→                  display: 'flex',
+   690→   690→                  alignItems: 'center',
+   691→   691→                  gap: 8,
+   692→   692→                  padding: '10px 16px',
+   693→   693→                  cursor: 'default',
+   694→   694→                }}
+   695→   695→              >
+   696→   696→                <div
+   697→   697→                  style={{
+   698→   698→                    width: 8,
+   699→   699→                    height: 8,
+   700→   700→                    borderRadius: '50%',
+   701→   701→                    background: p.color,
+   702→   702→                    flexShrink: 0,
+   703→   703→                  }}
+   704→   704→                />
+   705→   705→                <span
+   706→   706→                  style={{
+   707→   707→                    fontSize: 13,
+   708→   708→                    fontWeight: 500,
+   709→   709→                    color: '#A1A1AA',
+   710→   710→                    whiteSpace: 'nowrap',
+   711→   711→                  }}
+   712→   712→                >
+   713→   713→                  {p.name}
+   714→   714→                </span>
+   715→   715→              </div>
+   716→   716→            ))}
+   717→   717→          </motion.div>
+   718→   718→        </motion.div>
+   719→   719→      </section>
+   720→   720→
+   721→   721→      {/* ─────────────── SECTION 5: FOOTER ─────────────── */}
+   722→   722→      <footer
+   723→   723→        style={{
+   724→   724→          position: 'relative',
+   725→   725→          zIndex: 1,
+   726→   726→          padding: '40px 20px 32px',
+   727→   727→          borderTop: '1px solid var(--border-color)',
+   728→   728→        }}
+   729→   729→      >
+   730→   730→        <motion.div
+   731→   731→          initial="hidden"
+   732→   732→          whileInView="visible"
+   733→   733→          viewport={{ once: true, margin: '-20px' }}
+   734→   734→          variants={staggerContainer}
+   735→   735→        >
+   736→   736→          {/* Logo + Description */}
+   737→   737→          <motion.div
+   738→   738→            variants={fadeUp}
+   739→   739→            custom={0}
+   740→   740→            style={{
+   741→   741→              display: 'flex',
+   742→   742→              alignItems: 'center',
+   743→   743→              gap: 8,
+   744→   744→              marginBottom: 8,
+   745→   745→            }}
+   746→   746→          >
+   747→   747→            <div
+   748→   748→              className="glass-card"
+   749→   749→              style={{
+   750→   750→                width: 32,
+   751→   751→                height: 32,
+   752→   752→                display: 'flex',
+   753→   753→                alignItems: 'center',
+   754→   754→                justifyContent: 'center',
+   755→   755→                padding: 0,
+   756→   756→              }}
+   757→   757→            >
+   758→   758→              <Wallet size={16} color="#3B82F6" />
+   759→   759→            </div>
+   760→   760→            <span
+   761→   761→              style={{
+   762→   762→                fontSize: 16,
+   763→   763→                fontWeight: 700,
+   764→   764→                color: '#FAFAFA',
+   765→   765→                fontFamily: "var(--font-poppins), 'Poppins', sans-serif",
+   766→   766→              }}
+   767→   767→            >
+   768→   768→              NexTrade Pro
+   769→   769→            </span>
+   770→   770→          </motion.div>
+   771→   771→          <motion.p
+   772→   772→            variants={fadeUp}
+   773→   773→            custom={1}
+   774→   774→            style={{
+   775→   775→              fontSize: 13,
+   776→   776→              color: '#71717A',
+   777→   777→              lineHeight: 1.6,
+   778→   778→              marginBottom: 28,
+   779→   779→            }}
+   780→   780→          >
+   781→   781→            Pakistan&apos;s premier digital trading and payment platform.
+   782→   782→            Trade crypto, manage wallets, and make instant payments.
+   783→   783→          </motion.p>
+   784→   784→
+   785→   785→          {/* Download Section */}
+   786→   786→          <motion.div
+   787→   787→            variants={fadeUp}
+   788→   788→            custom={2}
+   789→   789→            style={{ marginBottom: 28 }}
+   790→   790→          >
+   791→   791→            <h3
+   792→   792→              style={{
+   793→   793→                fontSize: 15,
+   794→   794→                fontWeight: 700,
+   795→   795→                color: '#FAFAFA',
+   796→   796→                fontFamily: "var(--font-poppins), 'Poppins', sans-serif",
+   797→   797→                marginBottom: 12,
+   798→   798→              }}
+   799→   799→            >
+   800→   800→              Get NexTrade Pro on your device
+   801→   801→            </h3>
+   802→   802→            <div style={{ display: 'flex', gap: 10 }}>
+   803→   803→              <a
+   804→   804→                href="https://play.google.com/store/apps/details?id=com.nextrade.pro"
+   805→   805→                target="_blank"
+   806→   806→                rel="noopener noreferrer"
+   807→   807→                className="glass-card"
+   808→   808→                style={{
+   809→   809→                  flex: 1,
+   810→   810→                  display: 'flex',
+   811→   811→                  alignItems: 'center',
+   812→   812→                  gap: 10,
+   813→   813→                  padding: '12px 16px',
+   814→   814→                  textDecoration: 'none',
+   815→   815→                  cursor: 'pointer',
+   816→   816→                }}
+   817→   817→              >
+   818→   818→                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+   819→   819→                  <path d="M3.609 1.814L13.792 12 3.61 22.186a.996.996 0 0 1-.61-.92V2.734a1 1 0 0 1 .609-.92z" fill="#A1A1AA"/>
+   820→   820→                  <path d="M16.707 14.914l-2.915-2.914 2.915-2.914 3.091 1.778a1 1 0 0 1 0 1.736l-3.091 2.314z" fill="#A1A1AA" opacity="0.7"/>
+   821→   821→                  <path d="M3.609 1.814L13.792 12l2.915-2.914-10.37-5.976a1.006 1.006 0 0 0-.728-.296z" fill="#A1A1AA" opacity="0.5"/>
+   822→   822→                  <path d="M16.707 14.914L13.792 12l-10.183 10.186a1.006 1.006 0 0 0 .728-.296l12.37-7.976z" fill="#A1A1AA" opacity="0.85"/>
+   823→   823→                </svg>
+   824→   824→                <div>
+   825→   825→                  <div style={{ fontSize: 10, color: '#71717A', lineHeight: 1 }}>GET IT ON</div>
+   826→   826→                  <div
+   827→   827→                    style={{
+   828→   828→                      fontSize: 15,
+   829→   829→                      fontWeight: 700,
+   830→   830→                      color: '#FAFAFA',
+   831→   831→                      fontFamily: "var(--font-poppins), 'Poppins', sans-serif",
+   832→   832→                      letterSpacing: '0.02em',
+   833→   833→                    }}
+   834→   834→                  >
+   835→   835→                    Google Play
+   836→   836→                  </div>
+   837→   837→                </div>
+   838→   838→              </a>
+   839→   839→              <a
+   840→   840→                href="https://apps.apple.com/app/nextrade-pro/id6738234295"
+   841→   841→                target="_blank"
+   842→   842→                rel="noopener noreferrer"
+   843→   843→                className="glass-card"
+   844→   844→                style={{
+   845→   845→                  flex: 1,
+   846→   846→                  display: 'flex',
+   847→   847→                  alignItems: 'center',
+   848→   848→                  gap: 10,
+   849→   849→                  padding: '12px 16px',
+   850→   850→                  textDecoration: 'none',
+   851→   851→                  cursor: 'pointer',
+   852→   852→                }}
+   853→   853→              >
+   854→   854→                <svg width="20" height="20" viewBox="0 0 24 24" fill="#A1A1AA">
+   855→   855→                  <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/>
+   856→   856→                </svg>
+   857→   857→                <div>
+   858→   858→                  <div style={{ fontSize: 10, color: '#71717A', lineHeight: 1 }}>Download on the</div>
+   859→   859→                  <div
+   860→   860→                    style={{
+   861→   861→                      fontSize: 15,
+   862→   862→                      fontWeight: 700,
+   863→   863→                      color: '#FAFAFA',
+   864→   864→                      fontFamily: "var(--font-poppins), 'Poppins', sans-serif",
+   865→   865→                      letterSpacing: '-0.01em',
+   866→   866→                    }}
+   867→   867→                  >
+   868→   868→                    App Store
+   869→   869→                  </div>
+   870→   870→                </div>
+   871→   871→              </a>
+   872→   872→            </div>
+   873→   873→          </motion.div>
+   874→   874→
+   875→   875→          {/* Bottom Links */}
+   876→   876→          <motion.div
+   877→   877→            variants={fadeUp}
+   878→   878→            custom={3}
+   879→   879→            style={{
+   880→   880→              display: 'flex',
+   881→   881→              flexWrap: 'wrap',
+   882→   882→              gap: 8,
+   883→   883→              marginBottom: 16,
+   884→   884→              alignItems: 'center',
+   885→   885→            }}
+   886→   886→          >
+   887→   887→            <span style={{ fontSize: 11, color: '#52525B' }}>
+   888→   888→              © 2025 NexTrade Pro. All rights reserved.
+   889→   889→            </span>
+   890→   890→            <span style={{ fontSize: 11, color: '#3F3F46' }}>·</span>
+   891→   891→            <button
+   892→   892→              style={{
+   893→   893→                fontSize: 11,
+   894→   894→                color: '#71717A',
+   895→   895→                background: 'none',
+   896→   896→                border: 'none',
+   897→   897→                cursor: 'pointer',
+   898→   898→                padding: 0,
+   899→   899→              }}
+   900→   900→            >
+   901→   901→              Privacy Policy
+   902→   902→            </button>
+   903→   903→            <span style={{ fontSize: 11, color: '#3F3F46' }}>·</span>
+   904→   904→            <button
+   905→   905→              style={{
+   906→   906→                fontSize: 11,
+   907→   907→                color: '#71717A',
+   908→   908→                background: 'none',
+   909→   909→                border: 'none',
+   910→   910→                cursor: 'pointer',
+   911→   911→                padding: 0,
+   912→   912→              }}
+   913→   913→            >
+   914→   914→              Terms of Service
+   915→   915→            </button>
+   916→   916→          </motion.div>
+   917→   917→
+   918→   918→          {/* Security Note */}
+   919→   919→          <motion.div
+   920→   920→            variants={fadeUp}
+   921→   921→            custom={4}
+   922→   922→            style={{
+   923→   923→              display: 'flex',
+   924→   924→              alignItems: 'center',
+   925→   925→              justifyContent: 'center',
+   926→   926→              gap: 6,
+   927→   927→            }}
+   928→   928→          >
+   929→   929→            <Lock size={10} color="#52525B" />
+   930→   930→            <span style={{ fontSize: 10, color: '#52525B' }}>
+   931→   931→              Secured with 256-bit encryption
+   932→   932→            </span>
+   933→   933→          </motion.div>
+   934→   934→        </motion.div>
+   935→   935→      </footer>
+   936→   936→    </div>
+   937→   937→  );
+   938→   938→}

@@ -1,0 +1,916 @@
+     1→     1→'use client';
+     2→     2→
+     3→     3→import React, { useState, useMemo } from 'react';
+     4→     4→import { motion, AnimatePresence } from 'framer-motion';
+     5→     5→import {
+     6→     6→  AreaChart,
+     7→     7→  Area,
+     8→     8→  BarChart,
+     9→     9→  Bar,
+    10→    10→  XAxis,
+    11→    11→  YAxis,
+    12→    12→  Tooltip,
+    13→    13→  ResponsiveContainer,
+    14→    14→  CartesianGrid,
+    15→    15→} from 'recharts';
+    16→    16→import {
+    17→    17→  Minus,
+    18→    18→  Plus,
+    19→    19→  ArrowUpRight,
+    20→    20→  ArrowDownRight,
+    21→    21→} from 'lucide-react';
+    22→    22→
+    23→    23→// ─── Mock Data ───
+    24→    24→
+    25→    25→function generatePriceData() {
+    26→    26→  const data = [];
+    27→    27→  let price = 65500;
+    28→    28→  const now = new Date();
+    29→    29→  for (let i = 168; i >= 0; i--) {
+    30→    30→    const date = new Date(now.getTime() - i * 60 * 60 * 1000);
+    31→    31→    const hour = date.getHours();
+    32→    32→    price += (Math.random() - 0.47) * 300;
+    33→    33→    price = Math.max(64000, Math.min(68000, price));
+    34→    34→    const vol = Math.round((Math.random() * 500 + 100) * 100) / 100;
+    35→    35→    data.push({
+    36→    36→      time: `${hour}:00`,
+    37→    37→      date: `${date.getMonth() + 1}/${date.getDate()} ${hour}:00`,
+    38→    38→      price: Math.round(price * 100) / 100,
+    39→    39→      volume: vol,
+    40→    40→    });
+    41→    41→  }
+    42→    42→  return data;
+    43→    43→}
+    44→    44→
+    45→    45→const askOrders = [
+    46→    46→  { price: 67285.50, amount: 1.2345 },
+    47→    47→  { price: 67260.00, amount: 0.8762 },
+    48→    48→  { price: 67245.30, amount: 2.1000 },
+    49→    49→  { price: 67210.80, amount: 0.5430 },
+    50→    50→  { price: 67190.20, amount: 1.6780 },
+    51→    51→];
+    52→    52→
+    53→    53→const bidOrders = [
+    54→    54→  { price: 67150.00, amount: 1.4500 },
+    55→    55→  { price: 67120.50, amount: 0.9870 },
+    56→    56→  { price: 67095.00, amount: 1.8200 },
+    57→    57→  { price: 67060.30, amount: 2.3400 },
+    58→    58→  { price: 67030.00, amount: 0.6540 },
+    59→    59→];
+    60→    60→
+    61→    61→const recentTradesBook = [
+    62→    62→  { time: '14:32:15', price: 67245.30, amount: 0.1500, isBuy: true },
+    63→    63→  { time: '14:32:10', price: 67240.00, amount: 0.0800, isBuy: false },
+    64→    64→  { time: '14:31:58', price: 67250.50, amount: 0.3200, isBuy: true },
+    65→    65→  { time: '14:31:45', price: 67235.00, amount: 0.1200, isBuy: false },
+    66→    66→  { time: '14:31:30', price: 67245.00, amount: 0.4500, isBuy: true },
+    67→    67→  { time: '14:31:15', price: 67230.00, amount: 0.0900, isBuy: false },
+    68→    68→  { time: '14:31:02', price: 67238.50, amount: 0.2100, isBuy: true },
+    69→    69→  { time: '14:30:48', price: 67225.00, amount: 0.5600, isBuy: true },
+    70→    70→  { time: '14:30:30', price: 67220.00, amount: 0.1300, isBuy: false },
+    71→    71→  { time: '14:30:15', price: 67228.00, amount: 0.7000, isBuy: true },
+    72→    72→];
+    73→    73→
+    74→    74→const timeframes = ['1m', '5m', '15m', '1H', '4H', '1D', '1W'];
+    75→    75→
+    76→    76→const orderTabs = ['Limit', 'Market', 'Stop'] as const;
+    77→    77→type OrderTab = (typeof orderTabs)[number];
+    78→    78→
+    79→    79→const bookTabs = ['Order Book', 'Recent Trades'] as const;
+    80→    80→type BookTab = (typeof bookTabs)[number];
+    81→    81→
+    82→    82→const maxAmount = Math.max(
+    83→    83→  ...askOrders.map((o) => o.amount),
+    84→    84→  ...bidOrders.map((o) => o.amount),
+    85→    85→);
+    86→    86→
+    87→    87→// ─── Custom Tooltip ───
+    88→    88→function ChartTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ value: number; dataKey: string }>; label?: string }) {
+    89→    89→  if (active && payload && payload.length) {
+    90→    90→    const priceItem = payload.find((p) => p.dataKey === 'price');
+    91→    91→    if (!priceItem) return null;
+    92→    92→    return (
+    93→    93→      <div
+    94→    94→        style={{
+    95→    95→          background: 'rgba(10, 15, 26, 0.95)',
+    96→    96→          border: '1px solid var(--border-color)',
+    97→    97→          borderRadius: 8,
+    98→    98→          padding: '10px 14px',
+    99→    99→        }}
+   100→   100→      >
+   101→   101→        <p style={{ color: 'var(--text-muted)', fontSize: 12, marginBottom: 4 }}>{label}</p>
+   102→   102→        <p style={{ color: '#fff', fontSize: 14, fontWeight: 600 }}>
+   103→   103→          ${priceItem.value.toLocaleString()}
+   104→   104→        </p>
+   105→   105→      </div>
+   106→   106→    );
+   107→   107→  }
+   108→   108→  return null;
+   109→   109→}
+   110→   110→
+   111→   111→// ─── Component ───
+   112→   112→export default function TradingPage() {
+   113→   113→  const priceData = useMemo(() => generatePriceData(), []);
+   114→   114→  const [activeTimeframe, setActiveTimeframe] = useState('1H');
+   115→   115→  const [activeBookTab, setActiveBookTab] = useState<BookTab>('Order Book');
+   116→   116→  const [activeOrderTab, setActiveOrderTab] = useState<OrderTab>('Limit');
+   117→   117→  const [orderSide, setOrderSide] = useState<'buy' | 'sell'>('buy');
+   118→   118→  const [limitPrice, setLimitPrice] = useState('67245.30');
+   119→   119→  const [amount, setAmount] = useState('');
+   120→   120→  const [sliderPercent, setSliderPercent] = useState(0);
+   121→   121→
+   122→   122→  const isBuy = orderSide === 'buy';
+   123→   123→  const sideColor = isBuy ? '#22c55e' : '#FF4757';
+   124→   124→  const sideBg = isBuy ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)';
+   125→   125→
+   126→   126→  const total = amount ? (parseFloat(amount) * parseFloat(limitPrice || '0')).toFixed(2) : '0.00';
+   127→   127→
+   128→   128→  const adjustPrice = (delta: number) => {
+   129→   129→    const current = parseFloat(limitPrice) || 0;
+   130→   130→    setLimitPrice((current + delta).toFixed(2));
+   131→   131→  };
+   132→   132→
+   133→   133→  const handleSliderChange = (pct: number) => {
+   134→   134→    setSliderPercent(pct);
+   135→   135→    const balance = 50000;
+   136→   136→    const price = parseFloat(limitPrice) || 0;
+   137→   137→    if (price > 0) {
+   138→   138→      const qty = ((balance * pct) / 100 / price).toFixed(6);
+   139→   139→      setAmount(qty);
+   140→   140→    }
+   141→   141→  };
+   142→   142→
+   143→   143→  const spread = (askOrders[0].price - bidOrders[0].price).toFixed(2);
+   144→   144→  const midPrice = ((askOrders[0].price + bidOrders[0].price) / 2).toFixed(2);
+   145→   145→
+   146→   146→  return (
+   147→   147→    <div className="flex flex-col lg:flex-row gap-3 animate-fade-in" style={{ height: '100%' }}>
+   148→   148→      {/* ─── Left Panel: Order Book ─── */}
+   149→   149→      <div
+   150→   150→        className="glass-card flex flex-col lg:w-[30%] min-w-0"
+   151→   151→        style={{ flexShrink: 0 }}
+   152→   152→      >
+   153→   153→        {/* Book Tabs */}
+   154→   154→        <div className="flex border-b" style={{ borderColor: 'var(--border-color)' }}>
+   155→   155→          {bookTabs.map((tab) => (
+   156→   156→            <button
+   157→   157→              key={tab}
+   158→   158→              className="flex-1 text-sm font-medium py-3 text-center transition-colors"
+   159→   159→              style={{
+   160→   160→                background: 'none',
+   161→   161→                border: 'none',
+   162→   162→                cursor: 'pointer',
+   163→   163→                color: activeBookTab === tab ? 'var(--text-primary)' : 'var(--text-muted)',
+   164→   164→                borderBottom: activeBookTab === tab ? '2px solid var(--accent-blue)' : '2px solid transparent',
+   165→   165→              }}
+   166→   166→              onClick={() => setActiveBookTab(tab)}
+   167→   167→            >
+   168→   168→              {tab}
+   169→   169→            </button>
+   170→   170→          ))}
+   171→   171→        </div>
+   172→   172→
+   173→   173→        <div className="flex-1 overflow-y-auto p-3">
+   174→   174→          <AnimatePresence mode="wait">
+   175→   175→            {activeBookTab === 'Order Book' ? (
+   176→   176→              <motion.div
+   177→   177→                key="orderbook"
+   178→   178→                initial={{ opacity: 0, x: -10 }}
+   179→   179→                animate={{ opacity: 1, x: 0 }}
+   180→   180→                exit={{ opacity: 0, x: 10 }}
+   181→   181→                transition={{ duration: 0.15 }}
+   182→   182→              >
+   183→   183→                {/* Column Headers */}
+   184→   184→                <div className="flex justify-between text-xs mb-2 px-1" style={{ color: 'var(--text-muted)' }}>
+   185→   185→                  <span>Price (USDT)</span>
+   186→   186→                  <span>Amount (BTC)</span>
+   187→   187→                </div>
+   188→   188→
+   189→   189→                {/* Asks (red, high to low) */}
+   190→   190→                <div className="space-y-0.5 mb-2">
+   191→   191→                  {askOrders.map((order, i) => {
+   192→   192→                    const depthPct = (order.amount / maxAmount) * 100;
+   193→   193→                    return (
+   194→   194→                      <div
+   195→   195→                        key={`ask-${i}`}
+   196→   196→                        className="flex justify-between items-center relative px-2 py-1.5 rounded text-sm"
+   197→   197→                        style={{ color: '#FF4757' }}
+   198→   198→                      >
+   199→   199→                        <div
+   200→   200→                          className="absolute right-0 top-0 bottom-0 rounded"
+   201→   201→                          style={{
+   202→   202→                            width: `${depthPct}%`,
+   203→   203→                            background: 'rgba(239, 68, 68, 0.1)',
+   204→   204→                          }}
+   205→   205→                        />
+   206→   206→                        <span className="relative font-mono font-medium">{order.price.toFixed(2)}</span>
+   207→   207→                        <span className="relative font-mono" style={{ color: 'var(--text-secondary)' }}>
+   208→   208→                          {order.amount.toFixed(4)}
+   209→   209→                        </span>
+   210→   210→                      </div>
+   211→   211→                    );
+   212→   212→                  })}
+   213→   213→                </div>
+   214→   214→
+   215→   215→                {/* Spread */}
+   216→   216→                <div
+   217→   217→                  className="flex flex-col items-center py-2.5 rounded-lg mb-2"
+   218→   218→                  style={{ background: 'var(--bg-primary)' }}
+   219→   219→                >
+   220→   220→                  <span className="text-lg font-bold" style={{ color: isBuy ? '#22c55e' : '#FF4757' }}>
+   221→   221→                    {midPrice}
+   222→   222→                  </span>
+   223→   223→                  <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+   224→   224→                    Spread: {spread}
+   225→   225→                  </span>
+   226→   226→                </div>
+   227→   227→
+   228→   228→                {/* Bids (green, high to low) */}
+   229→   229→                <div className="space-y-0.5">
+   230→   230→                  {bidOrders.map((order, i) => {
+   231→   231→                    const depthPct = (order.amount / maxAmount) * 100;
+   232→   232→                    return (
+   233→   233→                      <div
+   234→   234→                        key={`bid-${i}`}
+   235→   235→                        className="flex justify-between items-center relative px-2 py-1.5 rounded text-sm"
+   236→   236→                        style={{ color: '#22c55e' }}
+   237→   237→                      >
+   238→   238→                        <div
+   239→   239→                          className="absolute right-0 top-0 bottom-0 rounded"
+   240→   240→                          style={{
+   241→   241→                            width: `${depthPct}%`,
+   242→   242→                            background: 'rgba(34, 197, 94, 0.1)',
+   243→   243→                          }}
+   244→   244→                        />
+   245→   245→                        <span className="relative font-mono font-medium">{order.price.toFixed(2)}</span>
+   246→   246→                        <span className="relative font-mono" style={{ color: 'var(--text-secondary)' }}>
+   247→   247→                          {order.amount.toFixed(4)}
+   248→   248→                        </span>
+   249→   249→                      </div>
+   250→   250→                    );
+   251→   251→                  })}
+   252→   252→                </div>
+   253→   253→              </motion.div>
+   254→   254→            ) : (
+   255→   255→              <motion.div
+   256→   256→                key="recent-trades"
+   257→   257→                initial={{ opacity: 0, x: -10 }}
+   258→   258→                animate={{ opacity: 1, x: 0 }}
+   259→   259→                exit={{ opacity: 0, x: 10 }}
+   260→   260→                transition={{ duration: 0.15 }}
+   261→   261→              >
+   262→   262→                {/* Column Headers */}
+   263→   263→                <div className="flex justify-between text-xs mb-2 px-1" style={{ color: 'var(--text-muted)' }}>
+   264→   264→                  <span>Time</span>
+   265→   265→                  <span>Price (USDT)</span>
+   266→   266→                  <span>Amount</span>
+   267→   267→                </div>
+   268→   268→
+   269→   269→                <div className="space-y-0.5">
+   270→   270→                  {recentTradesBook.map((trade, i) => (
+   271→   271→                    <div
+   272→   272→                      key={i}
+   273→   273→                      className="flex justify-between items-center px-2 py-1.5 rounded text-sm"
+   274→   274→                    >
+   275→   275→                      <span className="font-mono" style={{ color: 'var(--text-muted)', fontSize: 12 }}>
+   276→   276→                        {trade.time}
+   277→   277→                      </span>
+   278→   278→                      <span
+   279→   279→                        className="font-mono font-medium"
+   280→   280→                        style={{ color: trade.isBuy ? '#22c55e' : '#FF4757' }}
+   281→   281→                      >
+   282→   282→                        {trade.price.toFixed(2)}
+   283→   283→                      </span>
+   284→   284→                      <span className="font-mono" style={{ color: 'var(--text-secondary)' }}>
+   285→   285→                        {trade.amount.toFixed(4)}
+   286→   286→                      </span>
+   287→   287→                    </div>
+   288→   288→                  ))}
+   289→   289→                </div>
+   290→   290→              </motion.div>
+   291→   291→            )}
+   292→   292→          </AnimatePresence>
+   293→   293→        </div>
+   294→   294→      </div>
+   295→   295→
+   296→   296→      {/* ─── Center Panel: Chart ─── */}
+   297→   297→      <div className="glass-card flex flex-col lg:w-[40%] min-w-0" style={{ flexShrink: 0 }}>
+   298→   298→        {/* Symbol Header */}
+   299→   299→        <div className="p-4 pb-2">
+   300→   300→          <div className="flex items-center justify-between flex-wrap gap-2">
+   301→   301→            <div>
+   302→   302→              <h2 className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>
+   303→   303→                BTC/USDT
+   304→   304→              </h2>
+   305→   305→              <div className="flex items-center gap-3 mt-1">
+   306→   306→                <span className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>
+   307→   307→                  $67,245.30
+   308→   308→                </span>
+   309→   309→                <span
+   310→   310→                  className="flex items-center gap-0.5 text-sm font-semibold"
+   311→   311→                  style={{ color: '#22c55e' }}
+   312→   312→                >
+   313→   313→                  <ArrowUpRight size={14} />
+   314→   314→                  +2.35%
+   315→   315→                </span>
+   316→   316→              </div>
+   317→   317→            </div>
+   318→   318→          </div>
+   319→   319→        </div>
+   320→   320→
+   321→   321→        {/* Timeframe Buttons */}
+   322→   322→        <div className="flex gap-1 px-4 pb-2">
+   323→   323→          {timeframes.map((tf) => (
+   324→   324→            <button
+   325→   325→              key={tf}
+   326→   326→              className="text-xs font-medium px-3 py-1.5 rounded-md transition-colors"
+   327→   327→              style={{
+   328→   328→                background: activeTimeframe === tf ? 'var(--accent-blue)' : 'transparent',
+   329→   329→                color: activeTimeframe === tf ? '#fff' : 'var(--text-muted)',
+   330→   330→                border: 'none',
+   331→   331→                cursor: 'pointer',
+   332→   332→              }}
+   333→   333→              onClick={() => setActiveTimeframe(tf)}
+   334→   334→            >
+   335→   335→              {tf}
+   336→   336→            </button>
+   337→   337→          ))}
+   338→   338→        </div>
+   339→   339→
+   340→   340→        {/* Price Chart */}
+   341→   341→        <div className="flex-1 px-2" style={{ minHeight: 250 }}>
+   342→   342→          <ResponsiveContainer width="100%" height="100%">
+   343→   343→            <AreaChart data={priceData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
+   344→   344→              <defs>
+   345→   345→                <linearGradient id="priceGradient" x1="0" y1="0" x2="0" y2="1">
+   346→   346→                  <stop offset="0%" stopColor="#E53935" stopOpacity={0.3} />
+   347→   347→                  <stop offset="95%" stopColor="#E53935" stopOpacity={0} />
+   348→   348→                </linearGradient>
+   349→   349→              </defs>
+   350→   350→              <CartesianGrid strokeDasharray="3 3" stroke="rgba(192, 199, 209, 0.08)" />
+   351→   351→              <XAxis
+   352→   352→                dataKey="time"
+   353→   353→                axisLine={false}
+   354→   354→                tickLine={false}
+   355→   355→                tick={{ fill: '#7A8599', fontSize: 10 }}
+   356→   356→                interval={23}
+   357→   357→              />
+   358→   358→              <YAxis
+   359→   359→                axisLine={false}
+   360→   360→                tickLine={false}
+   361→   361→                tick={{ fill: '#7A8599', fontSize: 10 }}
+   362→   362→                tickFormatter={(v: number) => `$${(v / 1000).toFixed(1)}k`}
+   363→   363→                domain={['dataMin - 200', 'dataMax + 200']}
+   364→   364→              />
+   365→   365→              <Tooltip content={<ChartTooltip />} />
+   366→   366→              <Area
+   367→   367→                type="monotone"
+   368→   368→                dataKey="price"
+   369→   369→                stroke="#E53935"
+   370→   370→                strokeWidth={2}
+   371→   371→                fill="url(#priceGradient)"
+   372→   372→                isAnimationActive={false}
+   373→   373→              />
+   374→   374→            </AreaChart>
+   375→   375→          </ResponsiveContainer>
+   376→   376→        </div>
+   377→   377→
+   378→   378→        {/* Volume Bars */}
+   379→   379→        <div className="px-2 pb-3" style={{ height: 80 }}>
+   380→   380→          <ResponsiveContainer width="100%" height="100%">
+   381→   381→            <BarChart data={priceData} margin={{ top: 0, right: 5, left: -20, bottom: 0 }}>
+   382→   382→              <XAxis dataKey="time" hide />
+   383→   383→              <YAxis hide />
+   384→   384→              <Tooltip
+   385→   385→                contentStyle={{
+   386→   386→                  background: 'rgba(10, 15, 26, 0.95)',
+   387→   387→                  border: '1px solid var(--border-color)',
+   388→   388→                  borderRadius: 8,
+   389→   389→                  fontSize: 12,
+   390→   390→                  color: '#fff',
+   391→   391→                }}
+   392→   392→                itemStyle={{ color: '#94a3b8' }}
+   393→   393→                labelStyle={{ color: '#7A8599' }}
+   394→   394→                formatter={(value: any) => [`${value} BTC`, 'Volume']}
+   395→   395→                labelFormatter={(label: any) => String(label)}
+   396→   396→              />
+   397→   397→              <Bar dataKey="volume" fill="#E53935" opacity={0.4} radius={[2, 2, 0, 0]} isAnimationActive={false} />
+   398→   398→            </BarChart>
+   399→   399→          </ResponsiveContainer>
+   400→   400→        </div>
+   401→   401→      </div>
+   402→   402→
+   403→   403→      {/* ─── Right Panel: Place Order ─── */}
+   404→   404→      <div className="glass-card flex flex-col lg:w-[30%] min-w-0" style={{ flexShrink: 0 }}>
+   405→   405→        {/* Order Tabs */}
+   406→   406→        <div className="flex border-b" style={{ borderColor: 'var(--border-color)' }}>
+   407→   407→          {orderTabs.map((tab) => (
+   408→   408→            <button
+   409→   409→              key={tab}
+   410→   410→              className="flex-1 text-sm font-medium py-3 text-center transition-colors"
+   411→   411→              style={{
+   412→   412→                background: 'none',
+   413→   413→                border: 'none',
+   414→   414→                cursor: 'pointer',
+   415→   415→                color: activeOrderTab === tab ? 'var(--text-primary)' : 'var(--text-muted)',
+   416→   416→                borderBottom: activeOrderTab === tab ? '2px solid var(--accent-blue)' : '2px solid transparent',
+   417→   417→              }}
+   418→   418→              onClick={() => setActiveOrderTab(tab)}
+   419→   419→            >
+   420→   420→              {tab}
+   421→   421→            </button>
+   422→   422→          ))}
+   423→   423→        </div>
+   424→   424→
+   425→   425→        <div className="flex-1 p-4 overflow-y-auto">
+   426→   426→          <AnimatePresence mode="wait">
+   427→   427→            {activeOrderTab === 'Limit' && (
+   428→   428→              <motion.div
+   429→   429→                key="limit"
+   430→   430→                initial={{ opacity: 0, y: 8 }}
+   431→   431→                animate={{ opacity: 1, y: 0 }}
+   432→   432→                exit={{ opacity: 0, y: -8 }}
+   433→   433→                transition={{ duration: 0.15 }}
+   434→   434→                className="space-y-4"
+   435→   435→              >
+   436→   436→                {/* Buy / Sell Toggle */}
+   437→   437→                <div
+   438→   438→                  className="flex rounded-lg p-1"
+   439→   439→                  style={{ background: 'var(--bg-primary)' }}
+   440→   440→                >
+   441→   441→                  <button
+   442→   442→                    className="flex-1 py-2 rounded-md text-sm font-semibold transition-all flex items-center justify-center gap-1.5"
+   443→   443→                    style={{
+   444→   444→                      background: isBuy ? 'rgba(34,197,94,0.2)' : 'transparent',
+   445→   445→                      color: isBuy ? '#22c55e' : 'var(--text-muted)',
+   446→   446→                      border: 'none',
+   447→   447→                      cursor: 'pointer',
+   448→   448→                    }}
+   449→   449→                    onClick={() => setOrderSide('buy')}
+   450→   450→                  >
+   451→   451→                    <ArrowUpRight size={14} />
+   452→   452→                    Buy
+   453→   453→                  </button>
+   454→   454→                  <button
+   455→   455→                    className="flex-1 py-2 rounded-md text-sm font-semibold transition-all flex items-center justify-center gap-1.5"
+   456→   456→                    style={{
+   457→   457→                      background: !isBuy ? 'rgba(239,68,68,0.2)' : 'transparent',
+   458→   458→                      color: !isBuy ? '#FF4757' : 'var(--text-muted)',
+   459→   459→                      border: 'none',
+   460→   460→                      cursor: 'pointer',
+   461→   461→                    }}
+   462→   462→                    onClick={() => setOrderSide('sell')}
+   463→   463→                  >
+   464→   464→                    <ArrowDownRight size={14} />
+   465→   465→                    Sell
+   466→   466→                  </button>
+   467→   467→                </div>
+   468→   468→
+   469→   469→                {/* Price Input */}
+   470→   470→                <div>
+   471→   471→                  <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>
+   472→   472→                    Price (USDT)
+   473→   473→                  </label>
+   474→   474→                  <div className="flex items-center gap-2">
+   475→   475→                    <button
+   476→   476→                      className="flex items-center justify-center rounded-md transition-colors"
+   477→   477→                      style={{
+   478→   478→                        width: 36,
+   479→   479→                        height: 40,
+   480→   480→                        background: 'var(--bg-primary)',
+   481→   481→                        border: '1px solid var(--border-color)',
+   482→   482→                        color: 'var(--text-secondary)',
+   483→   483→                        cursor: 'pointer',
+   484→   484→                        flexShrink: 0,
+   485→   485→                      }}
+   486→   486→                      onClick={() => adjustPrice(-0.1)}
+   487→   487→                    >
+   488→   488→                      <Minus size={14} />
+   489→   489→                    </button>
+   490→   490→                    <input
+   491→   491→                      type="text"
+   492→   492→                      className="input-field text-center font-mono"
+   493→   493→                      value={limitPrice}
+   494→   494→                      onChange={(e) => setLimitPrice(e.target.value)}
+   495→   495→                    />
+   496→   496→                    <button
+   497→   497→                      className="flex items-center justify-center rounded-md transition-colors"
+   498→   498→                      style={{
+   499→   499→                        width: 36,
+   500→   500→                        height: 40,
+   501→   501→                        background: 'var(--bg-primary)',
+   502→   502→                        border: '1px solid var(--border-color)',
+   503→   503→                        color: 'var(--text-secondary)',
+   504→   504→                        cursor: 'pointer',
+   505→   505→                        flexShrink: 0,
+   506→   506→                      }}
+   507→   507→                      onClick={() => adjustPrice(0.1)}
+   508→   508→                    >
+   509→   509→                      <Plus size={14} />
+   510→   510→                    </button>
+   511→   511→                  </div>
+   512→   512→                </div>
+   513→   513→
+   514→   514→                {/* Amount Input */}
+   515→   515→                <div>
+   516→   516→                  <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>
+   517→   517→                    Amount (BTC)
+   518→   518→                  </label>
+   519→   519→                  <input
+   520→   520→                    type="text"
+   521→   521→                    className="input-field font-mono"
+   522→   522→                    placeholder="0.000000"
+   523→   523→                    value={amount}
+   524→   524→                    onChange={(e) => {
+   525→   525→                      setAmount(e.target.value);
+   526→   526→                      setSliderPercent(0);
+   527→   527→                    }}
+   528→   528→                  />
+   529→   529→                </div>
+   530→   530→
+   531→   531→                {/* Percentage Slider */}
+   532→   532→                <div>
+   533→   533→                  <div className="flex justify-between mb-1.5">
+   534→   534→                    {([25, 50, 75, 100] as const).map((pct) => (
+   535→   535→                      <button
+   536→   536→                        key={pct}
+   537→   537→                        className="text-xs font-medium px-3 py-1 rounded transition-colors"
+   538→   538→                        style={{
+   539→   539→                          background: sliderPercent === pct ? sideBg : 'var(--bg-primary)',
+   540→   540→                          color: sliderPercent === pct ? sideColor : 'var(--text-muted)',
+   541→   541→                          border: `1px solid ${sliderPercent === pct ? sideColor : 'var(--border-color)'}`,
+   542→   542→                          cursor: 'pointer',
+   543→   543→                        }}
+   544→   544→                        onClick={() => handleSliderChange(pct)}
+   545→   545→                      >
+   546→   546→                        {pct}%
+   547→   547→                      </button>
+   548→   548→                    ))}
+   549→   549→                  </div>
+   550→   550→                  <input
+   551→   551→                    type="range"
+   552→   552→                    min="0"
+   553→   553→                    max="100"
+   554→   554→                    value={sliderPercent}
+   555→   555→                    onChange={(e) => handleSliderChange(parseInt(e.target.value))}
+   556→   556→                    className="w-full"
+   557→   557→                    style={{
+   558→   558→                      WebkitAppearance: 'none',
+   559→   559→                      appearance: 'none',
+   560→   560→                      height: 4,
+   561→   561→                      borderRadius: 2,
+   562→   562→                      background: `linear-gradient(to right, ${sideColor} ${sliderPercent}%, var(--border-color) ${sliderPercent}%)`,
+   563→   563→                      outline: 'none',
+   564→   564→                      cursor: 'pointer',
+   565→   565→                    }}
+   566→   566→                  />
+   567→   567→                </div>
+   568→   568→
+   569→   569→                {/* Total Display */}
+   570→   570→                <div
+   571→   571→                  className="flex justify-between items-center p-3 rounded-lg"
+   572→   572→                  style={{ background: 'var(--bg-primary)' }}
+   573→   573→                >
+   574→   574→                  <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+   575→   575→                    Total
+   576→   576→                  </span>
+   577→   577→                  <span className="text-sm font-semibold font-mono" style={{ color: 'var(--text-primary)' }}>
+   578→   578→                    {total} USDT
+   579→   579→                  </span>
+   580→   580→                </div>
+   581→   581→
+   582→   582→                {/* Available Balance */}
+   583→   583→                <div
+   584→   584→                  className="flex justify-between items-center p-3 rounded-lg"
+   585→   585→                  style={{ background: 'var(--bg-primary)' }}
+   586→   586→                >
+   587→   587→                  <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+   588→   588→                    Available Balance
+   589→   589→                  </span>
+   590→   590→                  <span className="text-xs font-medium font-mono" style={{ color: 'var(--text-secondary)' }}>
+   591→   591→                    50,000.00 USDT
+   592→   592→                  </span>
+   593→   593→                </div>
+   594→   594→
+   595→   595→                {/* Submit Button */}
+   596→   596→                <motion.button
+   597→   597→                  className="w-full py-3 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-1.5"
+   598→   598→                  style={{
+   599→   599→                    background: isBuy
+   600→   600→                      ? 'linear-gradient(135deg, #22c55e, #16a34a)'
+   601→   601→                      : 'linear-gradient(135deg, #FF4757, #dc2626)',
+   602→   602→                    color: '#fff',
+   603→   603→                    border: 'none',
+   604→   604→                    cursor: 'pointer',
+   605→   605→                  }}
+   606→   606→                  whileHover={{ scale: 1.02, boxShadow: `0 4px 20px ${isBuy ? 'rgba(34,197,94,0.4)' : 'rgba(239,68,68,0.4)'}` }}
+   607→   607→                  whileTap={{ scale: 0.98 }}
+   608→   608→                >
+   609→   609→                  {isBuy ? (
+   610→   610→                    <>
+   611→   611→                      <ArrowUpRight size={16} />
+   612→   612→                      Buy BTC
+   613→   613→                    </>
+   614→   614→                  ) : (
+   615→   615→                    <>
+   616→   616→                      <ArrowDownRight size={16} />
+   617→   617→                      Sell BTC
+   618→   618→                    </>
+   619→   619→                  )}
+   620→   620→                </motion.button>
+   621→   621→              </motion.div>
+   622→   622→            )}
+   623→   623→
+   624→   624→            {activeOrderTab === 'Market' && (
+   625→   625→              <motion.div
+   626→   626→                key="market"
+   627→   627→                initial={{ opacity: 0, y: 8 }}
+   628→   628→                animate={{ opacity: 1, y: 0 }}
+   629→   629→                exit={{ opacity: 0, y: -8 }}
+   630→   630→                transition={{ duration: 0.15 }}
+   631→   631→                className="space-y-4"
+   632→   632→              >
+   633→   633→                {/* Buy / Sell Toggle */}
+   634→   634→                <div
+   635→   635→                  className="flex rounded-lg p-1"
+   636→   636→                  style={{ background: 'var(--bg-primary)' }}
+   637→   637→                >
+   638→   638→                  <button
+   639→   639→                    className="flex-1 py-2 rounded-md text-sm font-semibold transition-all flex items-center justify-center gap-1.5"
+   640→   640→                    style={{
+   641→   641→                      background: isBuy ? 'rgba(34,197,94,0.2)' : 'transparent',
+   642→   642→                      color: isBuy ? '#22c55e' : 'var(--text-muted)',
+   643→   643→                      border: 'none',
+   644→   644→                      cursor: 'pointer',
+   645→   645→                    }}
+   646→   646→                    onClick={() => setOrderSide('buy')}
+   647→   647→                  >
+   648→   648→                    <ArrowUpRight size={14} />
+   649→   649→                    Buy
+   650→   650→                  </button>
+   651→   651→                  <button
+   652→   652→                    className="flex-1 py-2 rounded-md text-sm font-semibold transition-all flex items-center justify-center gap-1.5"
+   653→   653→                    style={{
+   654→   654→                      background: !isBuy ? 'rgba(239,68,68,0.2)' : 'transparent',
+   655→   655→                      color: !isBuy ? '#FF4757' : 'var(--text-muted)',
+   656→   656→                      border: 'none',
+   657→   657→                      cursor: 'pointer',
+   658→   658→                    }}
+   659→   659→                    onClick={() => setOrderSide('sell')}
+   660→   660→                  >
+   661→   661→                    <ArrowDownRight size={14} />
+   662→   662→                    Sell
+   663→   663→                  </button>
+   664→   664→                </div>
+   665→   665→
+   666→   666→                {/* Amount Input */}
+   667→   667→                <div>
+   668→   668→                  <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>
+   669→   669→                    Amount (BTC)
+   670→   670→                  </label>
+   671→   671→                  <input
+   672→   672→                    type="text"
+   673→   673→                    className="input-field font-mono"
+   674→   674→                    placeholder="0.000000"
+   675→   675→                    value={amount}
+   676→   676→                    onChange={(e) => setAmount(e.target.value)}
+   677→   677→                  />
+   678→   678→                </div>
+   679→   679→
+   680→   680→                {/* Percentage Slider */}
+   681→   681→                <div>
+   682→   682→                  <div className="flex justify-between mb-1.5">
+   683→   683→                    {([25, 50, 75, 100] as const).map((pct) => (
+   684→   684→                      <button
+   685→   685→                        key={pct}
+   686→   686→                        className="text-xs font-medium px-3 py-1 rounded transition-colors"
+   687→   687→                        style={{
+   688→   688→                          background: sliderPercent === pct ? sideBg : 'var(--bg-primary)',
+   689→   689→                          color: sliderPercent === pct ? sideColor : 'var(--text-muted)',
+   690→   690→                          border: `1px solid ${sliderPercent === pct ? sideColor : 'var(--border-color)'}`,
+   691→   691→                          cursor: 'pointer',
+   692→   692→                        }}
+   693→   693→                        onClick={() => handleSliderChange(pct)}
+   694→   694→                      >
+   695→   695→                        {pct}%
+   696→   696→                      </button>
+   697→   697→                    ))}
+   698→   698→                  </div>
+   699→   699→                  <input
+   700→   700→                    type="range"
+   701→   701→                    min="0"
+   702→   702→                    max="100"
+   703→   703→                    value={sliderPercent}
+   704→   704→                    onChange={(e) => handleSliderChange(parseInt(e.target.value))}
+   705→   705→                    className="w-full"
+   706→   706→                    style={{
+   707→   707→                      WebkitAppearance: 'none',
+   708→   708→                      appearance: 'none',
+   709→   709→                      height: 4,
+   710→   710→                      borderRadius: 2,
+   711→   711→                      background: `linear-gradient(to right, ${sideColor} ${sliderPercent}%, var(--border-color) ${sliderPercent}%)`,
+   712→   712→                      outline: 'none',
+   713→   713→                      cursor: 'pointer',
+   714→   714→                    }}
+   715→   715→                  />
+   716→   716→                </div>
+   717→   717→
+   718→   718→                {/* Total */}
+   719→   719→                <div
+   720→   720→                  className="flex justify-between items-center p-3 rounded-lg"
+   721→   721→                  style={{ background: 'var(--bg-primary)' }}
+   722→   722→                >
+   723→   723→                  <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>Total</span>
+   724→   724→                  <span className="text-sm font-semibold font-mono" style={{ color: 'var(--text-primary)' }}>
+   725→   725→                    {total} USDT
+   726→   726→                  </span>
+   727→   727→                </div>
+   728→   728→
+   729→   729→                {/* Balance */}
+   730→   730→                <div
+   731→   731→                  className="flex justify-between items-center p-3 rounded-lg"
+   732→   732→                  style={{ background: 'var(--bg-primary)' }}
+   733→   733→                >
+   734→   734→                  <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Available Balance</span>
+   735→   735→                  <span className="text-xs font-medium font-mono" style={{ color: 'var(--text-secondary)' }}>50,000.00 USDT</span>
+   736→   736→                </div>
+   737→   737→
+   738→   738→                {/* Market Price Note */}
+   739→   739→                <div className="text-center py-1">
+   740→   740→                  <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+   741→   741→                    Market price: <span className="font-mono font-medium" style={{ color: 'var(--text-primary)' }}>$67,245.30</span>
+   742→   742→                  </span>
+   743→   743→                </div>
+   744→   744→
+   745→   745→                <motion.button
+   746→   746→                  className="w-full py-3 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-1.5"
+   747→   747→                  style={{
+   748→   748→                    background: isBuy
+   749→   749→                      ? 'linear-gradient(135deg, #22c55e, #16a34a)'
+   750→   750→                      : 'linear-gradient(135deg, #FF4757, #dc2626)',
+   751→   751→                    color: '#fff',
+   752→   752→                    border: 'none',
+   753→   753→                    cursor: 'pointer',
+   754→   754→                  }}
+   755→   755→                  whileHover={{ scale: 1.02, boxShadow: `0 4px 20px ${isBuy ? 'rgba(34,197,94,0.4)' : 'rgba(239,68,68,0.4)'}` }}
+   756→   756→                  whileTap={{ scale: 0.98 }}
+   757→   757→                >
+   758→   758→                  {isBuy ? (
+   759→   759→                    <><ArrowUpRight size={16} /> Buy BTC</>
+   760→   760→                  ) : (
+   761→   761→                    <><ArrowDownRight size={16} /> Sell BTC</>
+   762→   762→                  )}
+   763→   763→                </motion.button>
+   764→   764→              </motion.div>
+   765→   765→            )}
+   766→   766→
+   767→   767→            {activeOrderTab === 'Stop' && (
+   768→   768→              <motion.div
+   769→   769→                key="stop"
+   770→   770→                initial={{ opacity: 0, y: 8 }}
+   771→   771→                animate={{ opacity: 1, y: 0 }}
+   772→   772→                exit={{ opacity: 0, y: -8 }}
+   773→   773→                transition={{ duration: 0.15 }}
+   774→   774→                className="space-y-4"
+   775→   775→              >
+   776→   776→                {/* Buy / Sell Toggle */}
+   777→   777→                <div className="flex rounded-lg p-1" style={{ background: 'var(--bg-primary)' }}>
+   778→   778→                  <button
+   779→   779→                    className="flex-1 py-2 rounded-md text-sm font-semibold transition-all flex items-center justify-center gap-1.5"
+   780→   780→                    style={{
+   781→   781→                      background: isBuy ? 'rgba(34,197,94,0.2)' : 'transparent',
+   782→   782→                      color: isBuy ? '#22c55e' : 'var(--text-muted)',
+   783→   783→                      border: 'none',
+   784→   784→                      cursor: 'pointer',
+   785→   785→                    }}
+   786→   786→                    onClick={() => setOrderSide('buy')}
+   787→   787→                  >
+   788→   788→                    <ArrowUpRight size={14} />
+   789→   789→                    Buy
+   790→   790→                  </button>
+   791→   791→                  <button
+   792→   792→                    className="flex-1 py-2 rounded-md text-sm font-semibold transition-all flex items-center justify-center gap-1.5"
+   793→   793→                    style={{
+   794→   794→                      background: !isBuy ? 'rgba(239,68,68,0.2)' : 'transparent',
+   795→   795→                      color: !isBuy ? '#FF4757' : 'var(--text-muted)',
+   796→   796→                      border: 'none',
+   797→   797→                      cursor: 'pointer',
+   798→   798→                    }}
+   799→   799→                    onClick={() => setOrderSide('sell')}
+   800→   800→                  >
+   801→   801→                    <ArrowDownRight size={14} />
+   802→   802→                    Sell
+   803→   803→                  </button>
+   804→   804→                </div>
+   805→   805→
+   806→   806→                {/* Stop Price */}
+   807→   807→                <div>
+   808→   808→                  <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>
+   809→   809→                    Stop Price (USDT)
+   810→   810→                  </label>
+   811→   811→                  <input
+   812→   812→                    type="text"
+   813→   813→                    className="input-field font-mono"
+   814→   814→                    placeholder="0.00"
+   815→   815→                  />
+   816→   816→                </div>
+   817→   817→
+   818→   818→                {/* Amount Input */}
+   819→   819→                <div>
+   820→   820→                  <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>
+   821→   821→                    Amount (BTC)
+   822→   822→                  </label>
+   823→   823→                  <input
+   824→   824→                    type="text"
+   825→   825→                    className="input-field font-mono"
+   826→   826→                    placeholder="0.000000"
+   827→   827→                    value={amount}
+   828→   828→                    onChange={(e) => setAmount(e.target.value)}
+   829→   829→                  />
+   830→   830→                </div>
+   831→   831→
+   832→   832→                {/* Percentage Slider */}
+   833→   833→                <div>
+   834→   834→                  <div className="flex justify-between mb-1.5">
+   835→   835→                    {([25, 50, 75, 100] as const).map((pct) => (
+   836→   836→                      <button
+   837→   837→                        key={pct}
+   838→   838→                        className="text-xs font-medium px-3 py-1 rounded transition-colors"
+   839→   839→                        style={{
+   840→   840→                          background: sliderPercent === pct ? sideBg : 'var(--bg-primary)',
+   841→   841→                          color: sliderPercent === pct ? sideColor : 'var(--text-muted)',
+   842→   842→                          border: `1px solid ${sliderPercent === pct ? sideColor : 'var(--border-color)'}`,
+   843→   843→                          cursor: 'pointer',
+   844→   844→                        }}
+   845→   845→                        onClick={() => handleSliderChange(pct)}
+   846→   846→                      >
+   847→   847→                        {pct}%
+   848→   848→                      </button>
+   849→   849→                    ))}
+   850→   850→                  </div>
+   851→   851→                  <input
+   852→   852→                    type="range"
+   853→   853→                    min="0"
+   854→   854→                    max="100"
+   855→   855→                    value={sliderPercent}
+   856→   856→                    onChange={(e) => handleSliderChange(parseInt(e.target.value))}
+   857→   857→                    className="w-full"
+   858→   858→                    style={{
+   859→   859→                      WebkitAppearance: 'none',
+   860→   860→                      appearance: 'none',
+   861→   861→                      height: 4,
+   862→   862→                      borderRadius: 2,
+   863→   863→                      background: `linear-gradient(to right, ${sideColor} ${sliderPercent}%, var(--border-color) ${sliderPercent}%)`,
+   864→   864→                      outline: 'none',
+   865→   865→                      cursor: 'pointer',
+   866→   866→                    }}
+   867→   867→                  />
+   868→   868→                </div>
+   869→   869→
+   870→   870→                {/* Total */}
+   871→   871→                <div
+   872→   872→                  className="flex justify-between items-center p-3 rounded-lg"
+   873→   873→                  style={{ background: 'var(--bg-primary)' }}
+   874→   874→                >
+   875→   875→                  <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>Total</span>
+   876→   876→                  <span className="text-sm font-semibold font-mono" style={{ color: 'var(--text-primary)' }}>
+   877→   877→                    {total} USDT
+   878→   878→                  </span>
+   879→   879→                </div>
+   880→   880→
+   881→   881→                {/* Balance */}
+   882→   882→                <div
+   883→   883→                  className="flex justify-between items-center p-3 rounded-lg"
+   884→   884→                  style={{ background: 'var(--bg-primary)' }}
+   885→   885→                >
+   886→   886→                  <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Available Balance</span>
+   887→   887→                  <span className="text-xs font-medium font-mono" style={{ color: 'var(--text-secondary)' }}>50,000.00 USDT</span>
+   888→   888→                </div>
+   889→   889→
+   890→   890→                <motion.button
+   891→   891→                  className="w-full py-3 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-1.5"
+   892→   892→                  style={{
+   893→   893→                    background: isBuy
+   894→   894→                      ? 'linear-gradient(135deg, #22c55e, #16a34a)'
+   895→   895→                      : 'linear-gradient(135deg, #FF4757, #dc2626)',
+   896→   896→                    color: '#fff',
+   897→   897→                    border: 'none',
+   898→   898→                    cursor: 'pointer',
+   899→   899→                  }}
+   900→   900→                  whileHover={{ scale: 1.02, boxShadow: `0 4px 20px ${isBuy ? 'rgba(34,197,94,0.4)' : 'rgba(239,68,68,0.4)'}` }}
+   901→   901→                  whileTap={{ scale: 0.98 }}
+   902→   902→                >
+   903→   903→                  {isBuy ? (
+   904→   904→                    <><ArrowUpRight size={16} /> Stop Buy BTC</>
+   905→   905→                  ) : (
+   906→   906→                    <><ArrowDownRight size={16} /> Stop Sell BTC</>
+   907→   907→                  )}
+   908→   908→                </motion.button>
+   909→   909→              </motion.div>
+   910→   910→            )}
+   911→   911→          </AnimatePresence>
+   912→   912→        </div>
+   913→   913→      </div>
+   914→   914→    </div>
+   915→   915→  );
+   916→   916→}
