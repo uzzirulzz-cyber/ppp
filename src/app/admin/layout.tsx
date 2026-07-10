@@ -21,9 +21,9 @@ import {
   LayoutDashboard,
   Menu,
   Home,
-  Lock,
 } from 'lucide-react';
 import Image from 'next/image';
+import './admin-light-theme.css';
 
 const adminNav = [
   { icon: <LayoutDashboard size={20} />, label: 'Dashboard', path: '/admin' },
@@ -59,6 +59,32 @@ const pageTitles: Record<string, string> = {
   '/admin/invitations': 'Invitation Codes',
 };
 
+/* ─── Sidebar colors ─── */
+const SB = {
+  bg: '#1E3A8A',
+  border: 'rgba(255,255,255,0.12)',
+  text: '#FFFFFF',
+  muted: '#CBD5E1',
+  activeBg: '#3B82F6',
+  activeText: '#FFFFFF',
+  hoverBg: '#334155',
+  hoverText: '#FFFFFF',
+  red: '#F87171',
+};
+
+/* ─── Header / content colors ─── */
+const HD = {
+  bg: '#FFFFFF',
+  border: '#E2E8F0',
+  text: '#1E293B',
+  secondary: '#64748B',
+  hover: '#F1F5F9',
+};
+
+const CONTENT_BG = '#F8FAFC';
+const ACCENT = '#3B82F6';
+const ACCENT_HOVER = '#2563EB';
+
 function AdminSidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -75,6 +101,7 @@ function AdminSidebar({ open, onClose }: { open: boolean; onClose: () => void })
 
   return (
     <>
+      {/* Mobile overlay */}
       {open && (
         <div
           className="fixed inset-0 z-40 bg-black/50 lg:hidden"
@@ -83,17 +110,19 @@ function AdminSidebar({ open, onClose }: { open: boolean; onClose: () => void })
       )}
 
       <motion.aside
-        className="relative z-10 h-full sidebar"
-        animate={{ width: open ? 260 : 70 }}
+        className="relative z-10 h-full flex flex-col"
+        style={{ background: SB.bg, minWidth: open ? 260 : 70, width: open ? 260 : 70, transition: 'min-width 0.3s ease-in-out, width 0.3s ease-in-out' }}
+        animate={{ width: open ? 260 : 70, minWidth: open ? 260 : 70 }}
         transition={{ duration: 0.3, ease: 'easeInOut' as const }}
       >
+        {/* Brand */}
         <div
           className="flex items-center gap-3 px-4 py-5 border-b"
-          style={{ borderColor: 'var(--border-color)' }}
+          style={{ borderColor: SB.border }}
         >
           <Image
             src="/logo-admin.png"
-            alt="NextradePro.Top"
+            alt="NexTrade Pro"
             width={36}
             height={36}
             style={{ borderRadius: 8, objectFit: 'cover', flexShrink: 0 }}
@@ -107,14 +136,15 @@ function AdminSidebar({ open, onClose }: { open: boolean; onClose: () => void })
                 transition={{ duration: 0.2 }}
                 style={{ overflow: 'hidden', whiteSpace: 'nowrap' }}
               >
-                <span style={{ fontSize: 18, fontWeight: 700, color: '#FFFFFF' }}>
-                  Brock <span style={{ color: 'var(--accent-gold)' }}>Exchange</span>
+                <span style={{ fontSize: 18, fontWeight: 700, color: SB.text }}>
+                  NexTrade Pro
                 </span>
               </motion.div>
             )}
           </AnimatePresence>
         </div>
 
+        {/* Navigation */}
         <nav className="flex-1 overflow-y-auto py-3" style={{ overflowX: 'hidden' }}>
           <AnimatePresence>
             {open && (
@@ -128,7 +158,7 @@ function AdminSidebar({ open, onClose }: { open: boolean; onClose: () => void })
                   fontWeight: 600,
                   textTransform: 'uppercase',
                   letterSpacing: '0.08em',
-                  color: 'var(--text-muted)',
+                  color: SB.muted,
                 }}
               >
                 Admin Panel
@@ -141,20 +171,39 @@ function AdminSidebar({ open, onClose }: { open: boolean; onClose: () => void })
             return (
               <div
                 key={item.path}
-                className={`sidebar-item ${isActive ? 'active' : ''}`}
                 onClick={() => {
                   router.push(item.path);
                   onClose();
                 }}
                 title={!open ? item.label : undefined}
                 style={{
+                  display: 'flex',
+                  alignItems: 'center',
                   justifyContent: open ? 'flex-start' : 'center',
+                  gap: 12,
                   padding: open ? '10px 16px' : '10px 0',
                   margin: open ? '2px 8px' : '2px 0',
+                  borderRadius: 8,
                   cursor: 'pointer',
+                  background: isActive ? SB.activeBg : 'transparent',
+                  color: isActive ? SB.activeText : SB.muted,
+                  borderLeft: isActive ? `3px solid ${ACCENT}` : '3px solid transparent',
+                  transition: 'background 0.15s, color 0.15s',
+                }}
+                onMouseEnter={(e) => {
+                  if (!isActive) {
+                    e.currentTarget.style.background = SB.hoverBg;
+                    e.currentTarget.style.color = SB.hoverText;
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!isActive) {
+                    e.currentTarget.style.background = 'transparent';
+                    e.currentTarget.style.color = SB.muted;
+                  }
                 }}
               >
-                <span style={{ flexShrink: 0, color: isActive ? 'var(--accent-gold)' : undefined }}>{item.icon}</span>
+                <span style={{ flexShrink: 0, display: 'flex' }}>{item.icon}</span>
                 <AnimatePresence>
                   {open && (
                     <motion.span
@@ -162,7 +211,7 @@ function AdminSidebar({ open, onClose }: { open: boolean; onClose: () => void })
                       animate={{ opacity: 1, width: 'auto' }}
                       exit={{ opacity: 0, width: 0 }}
                       transition={{ duration: 0.2 }}
-                      style={{ overflow: 'hidden', whiteSpace: 'nowrap' }}
+                      style={{ overflow: 'hidden', whiteSpace: 'nowrap', fontSize: 14 }}
                     >
                       {item.label}
                     </motion.span>
@@ -173,18 +222,34 @@ function AdminSidebar({ open, onClose }: { open: boolean; onClose: () => void })
           })}
         </nav>
 
-        <div className="border-t" style={{ borderColor: 'var(--border-color)' }}>
+        {/* Bottom actions */}
+        <div className="border-t" style={{ borderColor: SB.border }}>
+          {/* Frontend link */}
           <div
-            className="sidebar-item"
             onClick={() => router.push('/')}
+            title={!open ? 'Frontend' : undefined}
             style={{
+              display: 'flex',
+              alignItems: 'center',
               justifyContent: open ? 'flex-start' : 'center',
+              gap: 12,
               padding: open ? '10px 16px' : '10px 0',
               margin: open ? '2px 8px' : '2px 0',
+              borderRadius: 8,
               cursor: 'pointer',
+              color: SB.muted,
+              transition: 'background 0.15s, color 0.15s',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = SB.hoverBg;
+              e.currentTarget.style.color = SB.hoverText;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'transparent';
+              e.currentTarget.style.color = SB.muted;
             }}
           >
-            <Home size={20} />
+            <Home size={20} style={{ flexShrink: 0 }} />
             <AnimatePresence>
               {open && (
                 <motion.span
@@ -192,7 +257,7 @@ function AdminSidebar({ open, onClose }: { open: boolean; onClose: () => void })
                   animate={{ opacity: 1, width: 'auto' }}
                   exit={{ opacity: 0, width: 0 }}
                   transition={{ duration: 0.2 }}
-                  style={{ overflow: 'hidden', whiteSpace: 'nowrap' }}
+                  style={{ overflow: 'hidden', whiteSpace: 'nowrap', fontSize: 14 }}
                 >
                   Frontend
                 </motion.span>
@@ -200,18 +265,30 @@ function AdminSidebar({ open, onClose }: { open: boolean; onClose: () => void })
             </AnimatePresence>
           </div>
 
+          {/* Logout */}
           <div
-            className="sidebar-item"
             onClick={handleLogout}
+            title={!open ? 'Logout' : undefined}
             style={{
+              display: 'flex',
+              alignItems: 'center',
               justifyContent: open ? 'flex-start' : 'center',
-              color: 'var(--accent-red)',
+              gap: 12,
               padding: open ? '10px 16px' : '10px 0',
               margin: open ? '0 8px 8px' : '0 0 8px',
+              borderRadius: 8,
               cursor: 'pointer',
+              color: SB.red,
+              transition: 'background 0.15s',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'rgba(248,113,113,0.1)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'transparent';
             }}
           >
-            <LogOut size={20} />
+            <LogOut size={20} style={{ flexShrink: 0 }} />
             <AnimatePresence>
               {open && (
                 <motion.span
@@ -219,7 +296,7 @@ function AdminSidebar({ open, onClose }: { open: boolean; onClose: () => void })
                   animate={{ opacity: 1, width: 'auto' }}
                   exit={{ opacity: 0, width: 0 }}
                   transition={{ duration: 0.2 }}
-                  style={{ overflow: 'hidden', whiteSpace: 'nowrap' }}
+                  style={{ overflow: 'hidden', whiteSpace: 'nowrap', fontSize: 14 }}
                 >
                   Logout
                 </motion.span>
@@ -248,20 +325,25 @@ function AdminHeader({ open, onToggle }: { open: boolean; onToggle: () => void }
 
   return (
     <header
-      className="navbar flex items-center justify-between px-6"
-      style={{ flexShrink: 0 }}
+      className="flex items-center justify-between px-6"
+      style={{
+        flexShrink: 0,
+        background: HD.bg,
+        borderBottom: `1px solid ${HD.border}`,
+        height: 60,
+      }}
     >
       <div className="flex items-center gap-4">
         <button
           onClick={onToggle}
           className="p-2 rounded-lg transition-colors cursor-pointer"
-          style={{ color: 'var(--text-secondary)' }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-hover)')}
+          style={{ color: HD.secondary }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = HD.hover)}
           onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
         >
           <Menu size={20} />
         </button>
-        <h1 style={{ fontSize: 18, fontWeight: 600, color: '#FFFFFF' }}>
+        <h1 style={{ fontSize: 18, fontWeight: 600, color: HD.text }}>
           {title}
         </h1>
       </div>
@@ -271,11 +353,11 @@ function AdminHeader({ open, onToggle }: { open: boolean; onToggle: () => void }
           onClick={() => router.push('/')}
           className="flex items-center gap-2 px-3 py-1.5 rounded-lg transition-colors cursor-pointer"
           style={{
-            color: 'var(--text-secondary)',
+            color: HD.secondary,
             fontSize: 13,
-            border: '1px solid var(--border-color)',
+            border: `1px solid ${HD.border}`,
           }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-hover)')}
+          onMouseEnter={(e) => (e.currentTarget.style.background = HD.hover)}
           onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
         >
           <Home size={14} />
@@ -283,24 +365,36 @@ function AdminHeader({ open, onToggle }: { open: boolean; onToggle: () => void }
         </button>
 
         <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg">
+          {/* Blue circle avatar */}
           <div
             className="flex items-center justify-center rounded-full font-semibold"
             style={{
               width: 32,
               height: 32,
-              background: 'var(--gradient)',
+              background: ACCENT,
               fontSize: 13,
-              color: '#07090f',
+              color: '#FFFFFF',
               flexShrink: 0,
             }}
           >
             {user?.name?.charAt(0)?.toUpperCase() || 'A'}
           </div>
           <div className="hidden sm:block text-left">
-            <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.2, color: '#FFFFFF' }}>
+            <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.2, color: HD.text }}>
               {user?.name || 'Admin'}
             </div>
-            <span className="badge badge-yellow" style={{ fontSize: 10, padding: '1px 6px' }}>
+            {/* Light blue role badge */}
+            <span
+              style={{
+                display: 'inline-block',
+                fontSize: 10,
+                padding: '1px 6px',
+                borderRadius: 4,
+                background: '#EFF6FF',
+                color: ACCENT,
+                fontWeight: 500,
+              }}
+            >
               {user?.role || 'SUPER_ADMIN'}
             </span>
           </div>
@@ -339,8 +433,17 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   if (checking) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--bg-primary)' }}>
-        <div className="animate-spin" style={{ width: 32, height: 32, border: '3px solid var(--border-color)', borderTopColor: 'var(--accent-gold)', borderRadius: '50%' }} />
+      <div className="min-h-screen flex items-center justify-center" style={{ background: CONTENT_BG }}>
+        <div
+          className="animate-spin"
+          style={{
+            width: 32,
+            height: 32,
+            border: '3px solid #E2E8F0',
+            borderTopColor: ACCENT,
+            borderRadius: '50%',
+          }}
+        />
       </div>
     );
   }
@@ -348,29 +451,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   if (!authorized) return null;
 
   return (
-    <div className="relative flex h-screen overflow-hidden" style={{ background: 'var(--bg-primary)' }}>
-      {/* Background image with dark overlay */}
-      <div
-        className="absolute inset-0 z-0"
-        style={{
-          backgroundImage: "url('/admin-bg.jpg')",
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-          backgroundRepeat: 'no-repeat',
-          backgroundAttachment: 'fixed',
-        }}
-      />
-      <div
-        className="absolute inset-0 z-0"
-        style={{
-          background: 'linear-gradient(135deg, rgba(7,9,15,0.95), rgba(16,20,29,0.92))',
-        }}
-      />
-
+    <div className="relative flex h-screen overflow-hidden" style={{ background: CONTENT_BG }}>
       <AdminSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <div className="relative z-10 flex flex-col flex-1 min-w-0 overflow-hidden">
         <AdminHeader open={sidebarOpen} onToggle={() => setSidebarOpen(!sidebarOpen)} />
-        <main className="flex-1 overflow-y-auto p-6">
+        <main className="flex-1 overflow-y-auto p-6" style={{ background: CONTENT_BG }}>
           <AnimatePresence mode="wait">
             <motion.div
               key={usePathname()}

@@ -56,10 +56,10 @@ function timeAgo(dateStr: string) {
 function ChartTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ value: number; name?: string; color?: string }>; label?: string }) {
   if (active && payload && payload.length) {
     return (
-      <div style={{ background: 'rgba(7, 9, 15, 0.95)', border: '1px solid var(--border-color)', borderRadius: 8, padding: '10px 14px' }}>
-        <p style={{ color: 'var(--text-muted)', fontSize: 12, marginBottom: 4 }}>{label}</p>
+      <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: 8, padding: '10px 14px', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
+        <p style={{ color: '#64748B', fontSize: 12, marginBottom: 4 }}>{label}</p>
         {payload.map((p, i) => (
-          <p key={i} style={{ color: p.color || '#fff', fontSize: 13, fontWeight: 600 }}>
+          <p key={i} style={{ color: p.color || '#1E293B', fontSize: 13, fontWeight: 600 }}>
             {p.name}: ${Number(p.value).toLocaleString()}
           </p>
         ))}
@@ -143,10 +143,10 @@ export default function AdminDashboardPage() {
       <div className="flex items-center justify-center h-64">
         <div className="text-center">
           <div
-            className="inline-block w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full mb-3"
-            style={{ animation: 'spin 0.6s linear infinite' }}
+            className="inline-block w-8 h-8 border-2 rounded-full mb-3"
+            style={{ borderColor: '#3B82F6', borderTopColor: 'transparent', animation: 'spin 0.6s linear infinite' }}
           />
-          <p style={{ color: 'var(--text-muted)' }}>Loading dashboard...</p>
+          <p style={{ color: '#64748B' }}>Loading dashboard...</p>
         </div>
       </div>
     );
@@ -155,29 +155,29 @@ export default function AdminDashboardPage() {
   /* ---------------- error state ---------------- */
   if (error) {
     return (
-      <div className="glass-card p-6" style={{ borderColor: 'var(--accent-red)' }}>
-        <p style={{ color: 'var(--accent-red)' }}>{error}</p>
+      <div className="glass-card p-6" style={{ borderColor: '#EF4444' }}>
+        <p style={{ color: '#EF4444' }}>{error}</p>
       </div>
     );
   }
 
   /* ---------------- stat card definitions ---------------- */
   const row1 = [
-    { label: 'Total Users', value: stats.totalUsers, icon: Users, color: 'var(--accent-cyan)', raw: true },
-    { label: 'Active Traders', value: stats.activeUsers, icon: Activity, color: 'var(--accent-green)', raw: true },
-    { label: 'Platform Equity', value: `$${stats.platformEquity?.toLocaleString()}`, icon: Wallet, color: 'var(--accent-gold)', raw: false },
-    { label: 'Total Revenue', value: `$${stats.revenue?.toLocaleString()}`, icon: DollarSign, color: 'var(--accent-green)', raw: false },
+    { label: 'Total Users', value: stats.totalUsers, icon: Users, color: '#3B82F6', raw: true },
+    { label: 'Active Traders', value: stats.activeUsers, icon: Activity, color: '#10B981', raw: true },
+    { label: 'Platform Equity', value: `$${stats.platformEquity?.toLocaleString()}`, icon: Wallet, color: '#3B82F6', raw: false },
+    { label: 'Total Revenue', value: `$${stats.revenue?.toLocaleString()}`, icon: DollarSign, color: '#10B981', raw: false },
   ];
 
   const row2 = [
-    { label: 'Total Deposits', value: `$${stats.totalDeposits?.toLocaleString()}`, icon: ArrowUpRight, color: 'var(--accent-green)', raw: false },
-    { label: 'Total Withdrawals', value: `$${stats.totalWithdrawals?.toLocaleString()}`, icon: ArrowDownRight, color: 'var(--accent-red)', raw: false },
-    { label: 'Open Positions', value: stats.openTrades, icon: BarChart3, color: 'var(--accent-gold)', raw: true },
+    { label: 'Total Deposits', value: `$${stats.totalDeposits?.toLocaleString()}`, icon: ArrowUpRight, color: '#10B981', raw: false },
+    { label: 'Total Withdrawals', value: `$${stats.totalWithdrawals?.toLocaleString()}`, icon: ArrowDownRight, color: '#EF4444', raw: false },
+    { label: 'Open Positions', value: stats.openTrades, icon: BarChart3, color: '#3B82F6', raw: true },
     {
       label: 'Pending Actions',
       value: (stats.pendingDeposits || 0) + (stats.pendingWithdrawals || 0),
       icon: AlertTriangle,
-      color: 'var(--accent-red)',
+      color: '#EF4444',
       raw: true,
       sub: 'deposits/withdrawals awaiting review',
     },
@@ -194,10 +194,10 @@ export default function AdminDashboardPage() {
       {/* ---------- Header ---------- */}
       <motion.div variants={itemVariants}>
         <div className="flex items-center gap-3 mb-1">
-          <ShieldCheck size={26} style={{ color: 'var(--accent-gold)' }} />
-          <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>Super Admin Dashboard</h1>
+          <ShieldCheck size={26} style={{ color: '#3B82F6' }} />
+          <h1 className="text-2xl font-bold" style={{ color: '#1E293B' }}>Super Admin Dashboard</h1>
         </div>
-        <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+        <p className="text-sm" style={{ color: '#64748B' }}>
           Platform overview and key metrics at a glance.
         </p>
       </motion.div>
@@ -207,10 +207,10 @@ export default function AdminDashboardPage() {
         <motion.div
           variants={itemVariants}
           className="glass-card px-4 py-3 flex items-center gap-3"
-          style={{ borderLeft: '3px solid var(--accent-cyan)' }}
+          style={{ borderLeft: '3px solid #3B82F6' }}
         >
-          <Eye size={18} style={{ color: 'var(--accent-cyan)' }} />
-          <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+          <Eye size={18} style={{ color: '#3B82F6' }} />
+          <p className="text-sm" style={{ color: '#64748B' }}>
             Sub-Agent View — showing data for your assigned customers only
           </p>
         </motion.div>
@@ -223,14 +223,14 @@ export default function AdminDashboardPage() {
           return (
             <motion.div key={c.label} variants={itemVariants} className="stat-card p-5 flex items-start justify-between">
               <div>
-                <p className="text-xs font-medium mb-1" style={{ color: 'var(--text-muted)' }}>{c.label}</p>
-                <p className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>
+                <p className="text-xs font-medium mb-1" style={{ color: '#64748B' }}>{c.label}</p>
+                <p className="text-2xl font-bold" style={{ color: '#1E293B' }}>
                   {c.raw ? (c.value as number)?.toLocaleString() : c.value}
                 </p>
               </div>
               <div
                 className="flex items-center justify-center w-11 h-11 rounded-xl"
-                style={{ background: `${c.color}18` }}
+                style={{ background: '#EFF6FF' }}
               >
                 <Icon size={22} style={{ color: c.color }} />
               </div>
@@ -246,17 +246,17 @@ export default function AdminDashboardPage() {
           return (
             <motion.div key={c.label} variants={itemVariants} className="stat-card p-5 flex items-start justify-between">
               <div>
-                <p className="text-xs font-medium mb-1" style={{ color: 'var(--text-muted)' }}>{c.label}</p>
-                <p className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>
+                <p className="text-xs font-medium mb-1" style={{ color: '#64748B' }}>{c.label}</p>
+                <p className="text-2xl font-bold" style={{ color: '#1E293B' }}>
                   {c.raw ? (c.value as number)?.toLocaleString() : c.value}
                 </p>
                 {c.sub && (
-                  <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>{c.sub}</p>
+                  <p className="text-xs mt-1" style={{ color: '#64748B' }}>{c.sub}</p>
                 )}
               </div>
               <div
                 className="flex items-center justify-center w-11 h-11 rounded-xl"
-                style={{ background: `${c.color}18` }}
+                style={{ background: '#EFF6FF' }}
               >
                 <Icon size={22} style={{ color: c.color }} />
               </div>
@@ -270,11 +270,11 @@ export default function AdminDashboardPage() {
         <motion.div
           variants={itemVariants}
           className="glass-card p-5"
-          style={{ borderLeft: '3px solid var(--accent-gold)' }}
+          style={{ borderLeft: '3px solid #3B82F6' }}
         >
           <div className="flex items-center gap-2 mb-4">
-            <Clock size={18} style={{ color: 'var(--accent-gold)' }} />
-            <h3 className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>
+            <Clock size={18} style={{ color: '#3B82F6' }} />
+            <h3 className="text-base font-semibold" style={{ color: '#1E293B' }}>
               Pending Transactions
             </h3>
             <span className="badge badge-amber ml-2">{stats.pendingTransactions.length}</span>
@@ -284,13 +284,13 @@ export default function AdminDashboardPage() {
               <div
                 key={tx.id}
                 className="flex items-center justify-between py-2 px-3 rounded-lg"
-                style={{ background: 'rgba(255,255,255,0.02)' }}
+                style={{ background: '#F8FAFC' }}
               >
                 <div className="flex items-center gap-3">
-                  <UserCheck size={16} style={{ color: 'var(--text-muted)' }} />
+                  <UserCheck size={16} style={{ color: '#64748B' }} />
                   <div>
-                    <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{tx.user?.name || 'Unknown'}</p>
-                    <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{tx.user?.email || ''} · {formatUSD(tx.amount)} {tx.currency}</p>
+                    <p className="text-sm font-medium" style={{ color: '#1E293B' }}>{tx.user?.name || 'Unknown'}</p>
+                    <p className="text-xs" style={{ color: '#64748B' }}>{tx.user?.email || ''} · {formatUSD(tx.amount)} {tx.currency}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
@@ -315,30 +315,30 @@ export default function AdminDashboardPage() {
         {/* Deposits vs Withdrawals — Last 7 Days */}
         <motion.div variants={itemVariants} className="glass-card p-5">
           <div className="flex items-center gap-2 mb-1">
-            <TrendingUp size={18} style={{ color: 'var(--accent-green)' }} />
-            <h3 className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>
+            <TrendingUp size={18} style={{ color: '#10B981' }} />
+            <h3 className="text-base font-semibold" style={{ color: '#1E293B' }}>
               Deposits vs Withdrawals — Last 7 Days
             </h3>
           </div>
-          <p className="text-xs mb-4" style={{ color: 'var(--text-muted)' }}>Daily net flow comparison</p>
+          <p className="text-xs mb-4" style={{ color: '#64748B' }}>Daily net flow comparison</p>
           <ResponsiveContainer width="100%" height={280}>
             <AreaChart data={stats.dailyStats}>
               <defs>
                 <linearGradient id="gradDep" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#00D26A" stopOpacity={0.3} />
-                  <stop offset="100%" stopColor="#00D26A" stopOpacity={0} />
+                  <stop offset="0%" stopColor="#10B981" stopOpacity={0.3} />
+                  <stop offset="100%" stopColor="#10B981" stopOpacity={0} />
                 </linearGradient>
                 <linearGradient id="gradWdr" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#FF3D57" stopOpacity={0.3} />
-                  <stop offset="100%" stopColor="#FF3D57" stopOpacity={0} />
+                  <stop offset="0%" stopColor="#EF4444" stopOpacity={0.3} />
+                  <stop offset="100%" stopColor="#EF4444" stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(192,199,209,0.07)" />
-              <XAxis dataKey="date" tick={{ fill: '#7A8599', fontSize: 12 }} axisLine={false} tickLine={false} />
-              <YAxis tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} tick={{ fill: '#7A8599', fontSize: 12 }} axisLine={false} tickLine={false} width={60} />
+              <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
+              <XAxis dataKey="date" tick={{ fill: '#64748B', fontSize: 12 }} axisLine={false} tickLine={false} />
+              <YAxis tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} tick={{ fill: '#64748B', fontSize: 12 }} axisLine={false} tickLine={false} width={60} />
               <Tooltip content={<ChartTooltip />} />
-              <Area type="monotone" dataKey="deposits" name="Deposits" stroke="#00D26A" fill="url(#gradDep)" strokeWidth={2} />
-              <Area type="monotone" dataKey="withdrawals" name="Withdrawals" stroke="#FF3D57" fill="url(#gradWdr)" strokeWidth={2} />
+              <Area type="monotone" dataKey="deposits" name="Deposits" stroke="#10B981" fill="url(#gradDep)" strokeWidth={2} />
+              <Area type="monotone" dataKey="withdrawals" name="Withdrawals" stroke="#EF4444" fill="url(#gradWdr)" strokeWidth={2} />
             </AreaChart>
           </ResponsiveContainer>
         </motion.div>
@@ -346,20 +346,20 @@ export default function AdminDashboardPage() {
         {/* Monthly Overview */}
         <motion.div variants={itemVariants} className="glass-card p-5">
           <div className="flex items-center gap-2 mb-1">
-            <BarChart3 size={18} style={{ color: 'var(--accent-gold)' }} />
-            <h3 className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>
+            <BarChart3 size={18} style={{ color: '#3B82F6' }} />
+            <h3 className="text-base font-semibold" style={{ color: '#1E293B' }}>
               Monthly Overview
             </h3>
           </div>
-          <p className="text-xs mb-4" style={{ color: 'var(--text-muted)' }}>Aggregated monthly deposits and withdrawals</p>
+          <p className="text-xs mb-4" style={{ color: '#64748B' }}>Aggregated monthly deposits and withdrawals</p>
           <ResponsiveContainer width="100%" height={280}>
             <BarChart data={stats.monthlyStats}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(192,199,209,0.07)" />
-              <XAxis dataKey="month" tick={{ fill: '#7A8599', fontSize: 12 }} axisLine={false} tickLine={false} />
-              <YAxis tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} tick={{ fill: '#7A8599', fontSize: 12 }} axisLine={false} tickLine={false} width={60} />
+              <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
+              <XAxis dataKey="month" tick={{ fill: '#64748B', fontSize: 12 }} axisLine={false} tickLine={false} />
+              <YAxis tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} tick={{ fill: '#64748B', fontSize: 12 }} axisLine={false} tickLine={false} width={60} />
               <Tooltip content={<ChartTooltip />} />
-              <Bar dataKey="deposits" name="Deposits" fill="#00D26A" radius={[4, 4, 0, 0]} barSize={18} />
-              <Bar dataKey="withdrawals" name="Withdrawals" fill="#FF3D57" radius={[4, 4, 0, 0]} barSize={18} />
+              <Bar dataKey="deposits" name="Deposits" fill="#10B981" radius={[4, 4, 0, 0]} barSize={18} />
+              <Bar dataKey="withdrawals" name="Withdrawals" fill="#EF4444" radius={[4, 4, 0, 0]} barSize={18} />
             </BarChart>
           </ResponsiveContainer>
         </motion.div>
@@ -370,8 +370,8 @@ export default function AdminDashboardPage() {
         {/* Top Trading Pairs */}
         <motion.div variants={itemVariants} className="glass-card p-5">
           <div className="flex items-center gap-2 mb-4">
-            <TrendingDown size={18} style={{ color: 'var(--accent-cyan)' }} />
-            <h3 className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>Top Trading Pairs</h3>
+            <TrendingDown size={18} style={{ color: '#3B82F6' }} />
+            <h3 className="text-base font-semibold" style={{ color: '#1E293B' }}>Top Trading Pairs</h3>
           </div>
           {stats.topPairs?.length > 0 ? (
             <div className="space-y-2">
@@ -379,26 +379,26 @@ export default function AdminDashboardPage() {
                 <div
                   key={pair.symbol}
                   className="flex items-center justify-between py-2.5 px-3 rounded-lg"
-                  style={{ background: idx % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent' }}
+                  style={{ background: idx % 2 === 0 ? '#F8FAFC' : 'transparent' }}
                 >
                   <div className="flex items-center gap-3">
-                    <span className="text-xs font-bold w-5 text-center" style={{ color: 'var(--text-muted)' }}>{idx + 1}</span>
-                    <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{pair.symbol}</span>
+                    <span className="text-xs font-bold w-5 text-center" style={{ color: '#64748B' }}>{idx + 1}</span>
+                    <span className="text-sm font-semibold" style={{ color: '#1E293B' }}>{pair.symbol}</span>
                   </div>
                   <div className="flex items-center gap-5">
                     <div className="text-right">
-                      <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Trades</p>
-                      <p className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>{pair.count}</p>
+                      <p className="text-xs" style={{ color: '#64748B' }}>Trades</p>
+                      <p className="text-sm font-medium" style={{ color: '#64748B' }}>{pair.count}</p>
                     </div>
                     <div className="text-right">
-                      <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Volume</p>
-                      <p className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>{formatUSD(pair.volume)}</p>
+                      <p className="text-xs" style={{ color: '#64748B' }}>Volume</p>
+                      <p className="text-sm font-medium" style={{ color: '#64748B' }}>{formatUSD(pair.volume)}</p>
                     </div>
                     <div className="text-right">
-                      <p className="text-xs" style={{ color: 'var(--text-muted)' }}>PnL</p>
+                      <p className="text-xs" style={{ color: '#64748B' }}>PnL</p>
                       <p
                         className="text-sm font-semibold"
-                        style={{ color: pair.pnl >= 0 ? 'var(--accent-green)' : 'var(--accent-red)' }}
+                        style={{ color: pair.pnl >= 0 ? '#10B981' : '#EF4444' }}
                       >
                         {pair.pnl >= 0 ? '+' : ''}{formatUSD(pair.pnl)}
                       </p>
@@ -408,15 +408,15 @@ export default function AdminDashboardPage() {
               ))}
             </div>
           ) : (
-            <p className="text-sm text-center py-8" style={{ color: 'var(--text-muted)' }}>No trading data yet</p>
+            <p className="text-sm text-center py-8" style={{ color: '#64748B' }}>No trading data yet</p>
           )}
         </motion.div>
 
         {/* Recent Activity */}
         <motion.div variants={itemVariants} className="glass-card p-5">
           <div className="flex items-center gap-2 mb-4">
-            <Clock size={18} style={{ color: 'var(--accent-cyan)' }} />
-            <h3 className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>Recent Activity</h3>
+            <Clock size={18} style={{ color: '#3B82F6' }} />
+            <h3 className="text-base font-semibold" style={{ color: '#1E293B' }}>Recent Activity</h3>
           </div>
           {stats.recentLogins?.length > 0 ? (
             <div className="space-y-2">
@@ -424,24 +424,24 @@ export default function AdminDashboardPage() {
                 <div
                   key={idx}
                   className="flex items-center justify-between py-2.5 px-3 rounded-lg"
-                  style={{ background: idx % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent' }}
+                  style={{ background: idx % 2 === 0 ? '#F8FAFC' : 'transparent' }}
                 >
                   <div className="flex items-center gap-3">
                     {entry.success ? (
-                      <UserCheck size={16} style={{ color: 'var(--accent-green)' }} />
+                      <UserCheck size={16} style={{ color: '#10B981' }} />
                     ) : (
-                      <UserX size={16} style={{ color: 'var(--accent-red)' }} />
+                      <UserX size={16} style={{ color: '#EF4444' }} />
                     )}
                     <div>
-                      <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{entry.user?.name || entry.email}</p>
-                      <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{entry.user?.email || entry.email}</p>
+                      <p className="text-sm font-medium" style={{ color: '#1E293B' }}>{entry.user?.name || entry.email}</p>
+                      <p className="text-xs" style={{ color: '#64748B' }}>{entry.user?.email || entry.email}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
                     <span className={`badge ${entry.success ? 'badge-green' : 'badge-red'}`}>
                       {entry.success ? 'Success' : 'Failed'}
                     </span>
-                    <span className="text-xs whitespace-nowrap" style={{ color: 'var(--text-muted)' }}>
+                    <span className="text-xs whitespace-nowrap" style={{ color: '#64748B' }}>
                       {timeAgo(entry.createdAt)}
                     </span>
                   </div>
@@ -449,7 +449,7 @@ export default function AdminDashboardPage() {
               ))}
             </div>
           ) : (
-            <p className="text-sm text-center py-8" style={{ color: 'var(--text-muted)' }}>No recent activity</p>
+            <p className="text-sm text-center py-8" style={{ color: '#64748B' }}>No recent activity</p>
           )}
         </motion.div>
       </div>

@@ -87,9 +87,70 @@ const TX_FILTERS: { key: TxFilter; label: string }[] = [
 ];
 
 const CURRENCY_META: Record<string, { bg: string; fg: string }> = {
-  USDT: { bg: 'rgba(0, 210, 106, 0.15)', fg: '#00d26a' },
-  BTC: { bg: 'rgba(245, 180, 0, 0.15)', fg: '#f5b400' },
-  ETH: { bg: 'rgba(139, 92, 246, 0.15)', fg: '#8b5cf6' },
+  USDT: { bg: 'rgba(59,130,246,0.1)', fg: '#3B82F6' },
+  BTC: { bg: 'rgba(245,158,11,0.1)', fg: '#F59E0B' },
+  ETH: { bg: 'rgba(99,102,241,0.1)', fg: '#6366F1' },
+};
+
+const BANKING_STYLES = {
+  card: {
+    background: '#FFFFFF',
+    border: '1px solid #E2E8F0',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+    borderRadius: '12px',
+  } as React.CSSProperties,
+  statCard: {
+    background: '#FFFFFF',
+    border: '1px solid #E2E8F0',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+    borderRadius: '12px',
+    padding: '20px',
+  } as React.CSSProperties,
+  input: {
+    background: '#FFFFFF',
+    border: '1px solid #E2E8F0',
+    color: '#1E293B',
+    borderRadius: '12px',
+    padding: '14px',
+    outline: 'none',
+    fontSize: '14px',
+    width: '100%',
+    transition: 'border-color 0.2s',
+  } as React.CSSProperties,
+  btnPrimary: {
+    background: '#3B82F6',
+    color: '#FFFFFF',
+    border: 'none',
+    borderRadius: '12px',
+    padding: '15px 38px',
+    fontWeight: 700,
+    cursor: 'pointer',
+    transition: 'all 0.2s',
+  } as React.CSSProperties,
+  btnSecondary: {
+    background: '#F1F5F9',
+    color: '#1E293B',
+    border: '1px solid #E2E8F0',
+    borderRadius: '12px',
+    padding: '10px 20px',
+    fontWeight: 500,
+    cursor: 'pointer',
+    transition: 'all 0.2s',
+  } as React.CSSProperties,
+  btnDanger: {
+    background: '#EF4444',
+    color: '#FFFFFF',
+    border: 'none',
+    borderRadius: '12px',
+    padding: '10px 20px',
+    fontWeight: 600,
+    cursor: 'pointer',
+    transition: 'all 0.2s',
+  } as React.CSSProperties,
+  dataTable: {
+    background: '#FFFFFF',
+    color: '#1E293B',
+  } as React.CSSProperties,
 };
 
 /* ════════════════════════════════════════════════════════════
@@ -114,34 +175,34 @@ const formatDate = (raw: string): string => {
   }
 };
 
-const statusBadge = (s: string): string => {
+const statusBadgeStyle = (s: string): React.CSSProperties => {
   switch (s.toUpperCase()) {
     case 'COMPLETED':
-      return 'badge-green';
+      return { background: 'rgba(16,185,129,0.1)', color: '#10B981' };
     case 'PENDING':
-      return 'badge-amber';
+      return { background: 'rgba(245,158,11,0.1)', color: '#F59E0B' };
     case 'PROCESSING':
-      return 'badge-blue';
+      return { background: 'rgba(59,130,246,0.1)', color: '#3B82F6' };
     case 'FAILED':
-      return 'badge-red';
+      return { background: 'rgba(239,68,68,0.08)', color: '#EF4444' };
     default:
-      return 'badge-silver';
+      return { background: 'rgba(148,163,184,0.1)', color: '#64748B' };
   }
 };
 
-const typeBadge = (t: string): string => {
+const typeBadgeStyle = (t: string): React.CSSProperties => {
   switch (t.toUpperCase()) {
     case 'DEPOSIT':
     case 'REFERRAL_BONUS':
-      return 'badge-green';
+      return { background: 'rgba(16,185,129,0.1)', color: '#10B981' };
     case 'WITHDRAW':
-      return 'badge-red';
+      return { background: 'rgba(239,68,68,0.08)', color: '#EF4444' };
     case 'TRADE':
-      return 'badge-blue';
+      return { background: 'rgba(59,130,246,0.1)', color: '#3B82F6' };
     case 'COMMISSION':
-      return 'badge-purple';
+      return { background: 'rgba(99,102,241,0.1)', color: '#6366F1' };
     default:
-      return 'badge-silver';
+      return { background: 'rgba(148,163,184,0.1)', color: '#64748B' };
   }
 };
 
@@ -157,7 +218,7 @@ function SummarySkeleton() {
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
       {Array.from({ length: 4 }).map((_, i) => (
-        <div key={i} className="stat-card">
+        <div key={i} className="transition-all duration-200" style={BANKING_STYLES.statCard}>
           <Skeleton className="h-3 w-20 mb-3" />
           <Skeleton className="h-8 w-32" />
         </div>
@@ -173,7 +234,7 @@ function BalanceSkeleton() {
         <div
           key={i}
           className="flex items-center justify-between p-4 rounded-xl"
-          style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)' }}
+          style={{ background: '#FFFFFF', border: '1px solid #E2E8F0' }}
         >
           <div className="flex items-center gap-3">
             <Skeleton className="h-10 w-10 rounded-full" />
@@ -244,6 +305,7 @@ function StyledSelect({
       disabled={disabled}
       onChange={(e) => onChange(e.target.value)}
       style={{
+        ...BANKING_STYLES.input,
         backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7a8d' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")`,
         backgroundRepeat: 'no-repeat',
         backgroundPosition: 'right 14px center',
@@ -583,37 +645,38 @@ export default function WalletPage() {
         <button
           onClick={() => navigate(Pages.WALLET)}
           className="btn-secondary flex items-center gap-2 !py-2 !px-4"
+          style={BANKING_STYLES.btnSecondary}
         >
           <ArrowLeft size={16} /> Back
         </button>
-        <h2 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>
+        <h2 className="text-xl font-bold" style={{ color: '#1E293B' }}>
           Deposit
         </h2>
       </div>
 
       {depSuccess ? (
-        <div className="glass-card p-8 text-center space-y-4">
+        <div className="p-8 text-center space-y-4 transition-all duration-300" style={BANKING_STYLES.card}>
           <div
             className="mx-auto w-16 h-16 rounded-full flex items-center justify-center"
-            style={{ background: 'rgba(0, 210, 106, 0.15)' }}
+            style={{ background: 'rgba(16, 185, 129, 0.1)' }}
           >
-            <Check size={32} style={{ color: 'var(--accent-green)' }} />
+            <Check size={32} style={{ color: '#10B981' }} />
           </div>
-          <h3 className="text-lg font-bold" style={{ color: 'var(--accent-green)' }}>
+          <h3 className="text-lg font-bold" style={{ color: '#10B981' }}>
             Deposit Request Submitted
           </h3>
-          <p style={{ color: 'var(--text-secondary)' }}>
+          <p style={{ color: '#64748B' }}>
             {depSuccess}
           </p>
-          <p style={{ color: 'var(--text-muted)' }}>
+          <p style={{ color: '#94A3B8' }}>
             Funds will appear in your wallet once confirmed on the network.
           </p>
         </div>
       ) : (
-        <div className="glass-card p-6 space-y-6">
+        <div className="p-6 space-y-6 transition-all duration-300" style={BANKING_STYLES.card}>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>
+              <label className="block text-sm font-medium mb-2" style={{ color: '#64748B' }}>
                 Select Currency
               </label>
               <StyledSelect
@@ -627,7 +690,7 @@ export default function WalletPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>
+              <label className="block text-sm font-medium mb-2" style={{ color: '#64748B' }}>
                 Network / Method
               </label>
               <StyledSelect
@@ -644,7 +707,7 @@ export default function WalletPage() {
 
           {/* Amount */}
           <div>
-            <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>
+            <label className="block text-sm font-medium mb-2" style={{ color: '#64748B' }}>
               Amount
             </label>
             <input
@@ -656,22 +719,25 @@ export default function WalletPage() {
               min="0"
               step="any"
               disabled={depSubmitting}
+              style={BANKING_STYLES.input}
             />
           </div>
 
           {/* Deposit address */}
           <div>
-            <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>
+            <label className="block text-sm font-medium mb-2" style={{ color: '#64748B' }}>
               Deposit Address
             </label>
             <div className="flex items-center gap-2">
               <div
                 className="trade-input flex-1 !py-3 font-mono text-xs sm:text-sm select-all"
                 style={{
-                  background: 'var(--bg-primary)',
+                  ...BANKING_STYLES.input,
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
                   whiteSpace: 'nowrap',
+                  paddingTop: '12px',
+                  paddingBottom: '12px',
                 }}
               >
                 {depAddr}
@@ -679,10 +745,11 @@ export default function WalletPage() {
               <button
                 onClick={() => handleCopy(depAddr)}
                 className="btn-secondary !p-3 flex-shrink-0"
+                style={{ background: '#EFF6FF', color: '#3B82F6', border: '1px solid #BFDBFE' }}
                 title="Copy address"
               >
                 {copied ? (
-                  <Check size={18} style={{ color: 'var(--accent-green)' }} />
+                  <Check size={18} style={{ color: '#10B981' }} />
                 ) : (
                   <Copy size={18} />
                 )}
@@ -695,16 +762,16 @@ export default function WalletPage() {
             <div
               className="w-48 h-48 rounded-2xl flex flex-col items-center justify-center"
               style={{
-                background: 'var(--bg-primary)',
-                border: '2px dashed var(--border-color)',
+                background: '#FFFFFF',
+                border: '2px dashed #E2E8F0',
               }}
             >
-              <QrCode size={48} style={{ color: 'var(--text-muted)' }} />
-              <span className="text-xs mt-2" style={{ color: 'var(--text-muted)' }}>
+              <QrCode size={48} style={{ color: '#94A3B8' }} />
+              <span className="text-xs mt-2" style={{ color: '#94A3B8' }}>
                 QR Code
               </span>
             </div>
-            <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--text-muted)' }}>
+            <div className="flex items-center gap-2 text-xs" style={{ color: '#94A3B8' }}>
               <Info size={14} />
               Minimum Deposit: $10.00
             </div>
@@ -712,8 +779,8 @@ export default function WalletPage() {
 
           {/* Optional Tx Hash */}
           <div>
-            <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>
-              Transaction Hash <span style={{ color: 'var(--text-muted)' }}>(optional)</span>
+            <label className="block text-sm font-medium mb-2" style={{ color: '#64748B' }}>
+              Transaction Hash <span style={{ color: '#94A3B8' }}>(optional)</span>
             </label>
             <input
               type="text"
@@ -722,6 +789,7 @@ export default function WalletPage() {
               value={depTxHash}
               onChange={(e) => setDepTxHash(e.target.value)}
               disabled={depSubmitting}
+              style={BANKING_STYLES.input}
             />
           </div>
 
@@ -730,9 +798,9 @@ export default function WalletPage() {
             <div
               className="flex items-center gap-2 p-3 rounded-xl text-sm"
               style={{
-                background: 'rgba(255, 61, 87, 0.1)',
-                color: 'var(--accent-red)',
-                border: '1px solid rgba(255, 61, 87, 0.2)',
+                background: 'rgba(239, 68, 68, 0.08)',
+                color: '#EF4444',
+                border: '1px solid rgba(239, 68, 68, 0.2)',
               }}
             >
               <AlertCircle size={16} /> {depError}
@@ -743,6 +811,7 @@ export default function WalletPage() {
             onClick={handleDepositSubmit}
             disabled={depSubmitting}
             className="btn-gold w-full !py-3 text-base flex items-center justify-center gap-2 disabled:opacity-50"
+            style={{ background: '#3B82F6', color: '#FFFFFF', border: 'none', borderRadius: '12px' }}
           >
             {depSubmitting ? (
               <>
@@ -767,24 +836,25 @@ export default function WalletPage() {
         <button
           onClick={() => navigate(Pages.WALLET)}
           className="btn-secondary flex items-center gap-2 !py-2 !px-4"
+          style={BANKING_STYLES.btnSecondary}
         >
           <ArrowLeft size={16} /> Back
         </button>
-        <h2 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>
+        <h2 className="text-xl font-bold" style={{ color: '#1E293B' }}>
           Withdraw
         </h2>
       </div>
 
-      <div className="glass-card p-6 space-y-5">
+      <div className="p-6 space-y-5 transition-all duration-300" style={BANKING_STYLES.card}>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>
+            <label className="block text-sm font-medium mb-2" style={{ color: '#64748B' }}>
               Currency
             </label>
             <StyledSelect value={wdCurrency} onChange={setWdCurrency} options={CURRENCIES} disabled={wdSubmitting} />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>
+            <label className="block text-sm font-medium mb-2" style={{ color: '#64748B' }}>
               Withdrawal Method
             </label>
             <StyledSelect value={wdMethod} onChange={setWdMethod} options={WITHDRAW_METHODS} disabled={wdSubmitting} />
@@ -793,14 +863,14 @@ export default function WalletPage() {
 
         <div>
           <div className="flex items-center justify-between mb-2">
-            <label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
+            <label className="text-sm font-medium" style={{ color: '#64748B' }}>
               Amount
             </label>
             <button
               onClick={() => setWdAmount(String(wdAvailable))}
               className="text-xs font-medium"
               style={{
-                color: 'var(--accent-cyan)',
+                color: '#3B82F6',
                 background: 'none',
                 border: 'none',
                 cursor: 'pointer',
@@ -819,11 +889,12 @@ export default function WalletPage() {
             min="0"
             step="any"
             disabled={wdSubmitting}
+            style={BANKING_STYLES.input}
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>
+          <label className="block text-sm font-medium mb-2" style={{ color: '#64748B' }}>
             Account Number
           </label>
           <input
@@ -833,11 +904,12 @@ export default function WalletPage() {
             value={wdAccountNumber}
             onChange={(e) => setWdAccountNumber(e.target.value)}
             disabled={wdSubmitting}
+            style={BANKING_STYLES.input}
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>
+          <label className="block text-sm font-medium mb-2" style={{ color: '#64748B' }}>
             Account Name
           </label>
           <input
@@ -847,10 +919,11 @@ export default function WalletPage() {
             value={wdAccountName}
             onChange={(e) => setWdAccountName(e.target.value)}
             disabled={wdSubmitting}
+            style={BANKING_STYLES.input}
           />
         </div>
 
-        <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--text-muted)' }}>
+        <div className="flex items-center gap-2 text-sm" style={{ color: '#94A3B8' }}>
           <Info size={14} />
           Fee: 1.00 USDT
         </div>
@@ -860,7 +933,7 @@ export default function WalletPage() {
             className="flex items-center gap-2 p-3 rounded-xl text-sm"
             style={{
               background: 'rgba(255, 61, 87, 0.1)',
-              color: 'var(--accent-red)',
+              color: '#EF4444',
               border: '1px solid rgba(255, 61, 87, 0.2)',
             }}
           >
@@ -872,9 +945,9 @@ export default function WalletPage() {
           <div
             className="flex items-center gap-2 p-3 rounded-xl text-sm"
             style={{
-              background: 'rgba(0, 210, 106, 0.1)',
-              color: 'var(--accent-green)',
-              border: '1px solid rgba(0, 210, 106, 0.2)',
+              background: 'rgba(16, 185, 129, 0.08)',
+              color: '#10B981',
+              border: '1px solid rgba(16, 185, 129, 0.2)',
             }}
           >
             <Check size={16} /> {wdSuccess}
@@ -885,6 +958,7 @@ export default function WalletPage() {
           onClick={handleWithdraw}
           disabled={wdSubmitting}
           className="btn-danger w-full !py-3 text-base flex items-center justify-center gap-2 disabled:opacity-50"
+          style={BANKING_STYLES.btnDanger}
         >
           {wdSubmitting ? (
             <>
@@ -906,10 +980,11 @@ export default function WalletPage() {
           <button
             onClick={() => navigate(Pages.WALLET)}
             className="btn-secondary flex items-center gap-2 !py-2 !px-4"
+            style={BANKING_STYLES.btnSecondary}
           >
             <ArrowLeft size={16} /> Back
           </button>
-          <h2 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>
+          <h2 className="text-xl font-bold" style={{ color: '#1E293B' }}>
             Transaction History
           </h2>
         </div>
@@ -919,8 +994,8 @@ export default function WalletPage() {
       <div
         className="flex gap-1 p-1 rounded-lg"
         style={{
-          background: 'var(--bg-secondary)',
-          border: '1px solid var(--border-color)',
+          background: '#F1F5F9',
+          border: '1px solid #E2E8F0',
           width: 'fit-content',
         }}
       >
@@ -930,8 +1005,8 @@ export default function WalletPage() {
             onClick={() => setTxFilter(f.key)}
             className="px-4 py-2 rounded-md text-sm font-medium transition-colors"
             style={{
-              color: txFilter === f.key ? 'var(--text-primary)' : 'var(--text-muted)',
-              background: txFilter === f.key ? 'var(--bg-card)' : 'transparent',
+              color: txFilter === f.key ? '#FFFFFF' : '#64748B',
+              background: txFilter === f.key ? '#3B82F6' : 'transparent',
               border: 'none',
               cursor: 'pointer',
             }}
@@ -942,18 +1017,18 @@ export default function WalletPage() {
       </div>
 
       {/* Table */}
-      <div className="glass-card overflow-hidden">
+      <div className="overflow-hidden transition-all duration-300" style={BANKING_STYLES.card}>
         {txLoading ? (
           <TableSkeleton />
         ) : transactions.length === 0 ? (
-          <div className="p-12 text-center" style={{ color: 'var(--text-muted)' }}>
+          <div className="p-12 text-center" style={{ color: '#94A3B8' }}>
             <Wallet size={40} className="mx-auto mb-3 opacity-40" />
             <p>No transactions found</p>
           </div>
         ) : (
           <>
             <div className="overflow-x-auto max-h-[480px] overflow-y-auto">
-              <table className="data-table">
+              <table className="data-table [&_th]:text-[#94A3B8] [&_th]:border-b-[#E2E8F0] [&_td]:text-[#1E293B] [&_td]:border-b-[#F1F5F9] [&_tr:hover]:bg-[#F8FAFC]" style={BANKING_STYLES.dataTable}>
                 <thead>
                   <tr>
                     <th>Date</th>
@@ -970,9 +1045,9 @@ export default function WalletPage() {
                     <tr key={tx.id}>
                       <td className="whitespace-nowrap">{formatDate(tx.createdAt)}</td>
                       <td>
-                        <span className={`badge ${typeBadge(tx.type)}`}>{tx.type}</span>
+                        <span className="badge" style={typeBadgeStyle(tx.type)}>{tx.type}</span>
                       </td>
-                      <td className="font-medium" style={{ color: 'var(--text-primary)' }}>
+                      <td className="font-medium" style={{ color: '#1E293B' }}>
                         {tx.currency}
                       </td>
                       <td
@@ -980,8 +1055,8 @@ export default function WalletPage() {
                         style={{
                           color:
                             tx.type === 'DEPOSIT' || tx.type === 'REFERRAL_BONUS'
-                              ? 'var(--accent-green)'
-                              : 'var(--accent-red)',
+                              ? '#10B981'
+                              : '#EF4444',
                         }}
                       >
                         {tx.type === 'DEPOSIT' || tx.type === 'REFERRAL_BONUS' ? '+' : '-'}
@@ -989,11 +1064,11 @@ export default function WalletPage() {
                       </td>
                       <td>{tx.fee > 0 ? formatAmount(tx.fee, tx.currency) : '—'}</td>
                       <td>
-                        <span className={`badge ${statusBadge(tx.status)}`}>{tx.status}</span>
+                        <span className="badge" style={statusBadgeStyle(tx.status)}>{tx.status}</span>
                       </td>
                       <td
                         className="hidden md:table-cell max-w-[200px] truncate"
-                        style={{ color: 'var(--text-muted)' }}
+                        style={{ color: '#94A3B8' }}
                       >
                         {tx.description || '—'}
                       </td>
@@ -1007,9 +1082,9 @@ export default function WalletPage() {
             {txPage.totalPages > 1 && (
               <div
                 className="flex items-center justify-between p-4"
-                style={{ borderTop: '1px solid var(--border-color)' }}
+                style={{ borderTop: '1px solid #E2E8F0' }}
               >
-                <span className="text-sm" style={{ color: 'var(--text-muted)' }}>
+                <span className="text-sm" style={{ color: '#94A3B8' }}>
                   Page {txPage.page} of {txPage.totalPages} &middot; {txPage.total} total
                 </span>
                 <div className="flex gap-2">
@@ -1017,6 +1092,7 @@ export default function WalletPage() {
                     onClick={() => fetchTransactions(txPage.page - 1, txFilter)}
                     disabled={txPage.page <= 1 || txLoading}
                     className="btn-secondary !py-1.5 !px-3 disabled:opacity-30"
+                    style={BANKING_STYLES.btnSecondary}
                   >
                     <ChevronLeft size={16} />
                   </button>
@@ -1024,6 +1100,7 @@ export default function WalletPage() {
                     onClick={() => fetchTransactions(txPage.page + 1, txFilter)}
                     disabled={txPage.page >= txPage.totalPages || txLoading}
                     className="btn-secondary !py-1.5 !px-3 disabled:opacity-30"
+                    style={BANKING_STYLES.btnSecondary}
                   >
                     <ChevronRight size={16} />
                   </button>
@@ -1051,10 +1128,11 @@ export default function WalletPage() {
             key={cur}
             className="flex items-center justify-between p-4 rounded-xl"
             style={{
-              background: 'var(--bg-secondary)',
-              border: '1px solid var(--border-color)',
+              background: '#FFFFFF',
+              border: '1px solid #E2E8F0',
+              borderBottom: '1px solid #E2E8F0',
             }}
-            whileHover={{ borderColor: 'rgba(245, 180, 0, 0.3)' }}
+            whileHover={{ borderColor: 'rgba(59, 130, 246, 0.3)' }}
           >
             <div className="flex items-center gap-3">
               <div
@@ -1064,12 +1142,12 @@ export default function WalletPage() {
                 <CurrencyIcon currency={cur} />
               </div>
               <div>
-                <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+                <span className="text-sm font-semibold" style={{ color: '#1E293B' }}>
                   {cur}
                 </span>
-                <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                <div className="text-xs" style={{ color: '#94A3B8' }}>
                   Available:{' '}
-                  <span style={{ color: 'var(--accent-green)' }}>
+                  <span style={{ color: '#10B981' }}>
                     {formatAmount(bal.amount, cur)}
                   </span>
                 </div>
@@ -1077,18 +1155,18 @@ export default function WalletPage() {
             </div>
             <div className="flex gap-4 sm:gap-10 text-right">
               <div className="hidden sm:block">
-                <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                <div className="text-xs" style={{ color: '#94A3B8' }}>
                   Frozen
                 </div>
-                <div className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
+                <div className="text-sm font-medium" style={{ color: '#64748B' }}>
                   {formatAmount(bal.frozen, cur)}
                 </div>
               </div>
               <div>
-                <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                <div className="text-xs" style={{ color: '#94A3B8' }}>
                   Total Value
                 </div>
-                <div className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
+                <div className="text-sm font-bold" style={{ color: '#1E293B' }}>
                   {cur === 'USDT'
                     ? formatUSD(bal.amount + bal.frozen)
                     : formatAmount(bal.amount + bal.frozen, cur)}
@@ -1108,8 +1186,8 @@ export default function WalletPage() {
       <div
         className="flex gap-1 p-1 rounded-lg"
         style={{
-          background: 'var(--bg-secondary)',
-          border: '1px solid var(--border-color)',
+          background: '#F1F5F9',
+          border: '1px solid #E2E8F0',
           width: 'fit-content',
         }}
       >
@@ -1119,8 +1197,8 @@ export default function WalletPage() {
             onClick={() => setActiveTab(tab.key)}
             className="relative px-5 py-2 rounded-md text-sm font-medium transition-colors"
             style={{
-              color: activeTab === tab.key ? 'var(--text-primary)' : 'var(--text-muted)',
-              background: activeTab === tab.key ? 'var(--bg-card)' : 'transparent',
+              color: activeTab === tab.key ? '#FFFFFF' : '#64748B',
+              background: activeTab === tab.key ? '#3B82F6' : 'transparent',
               border: 'none',
               cursor: 'pointer',
               zIndex: 1,
@@ -1132,8 +1210,8 @@ export default function WalletPage() {
                 layoutId="wallet-tab-ind"
                 className="absolute inset-0 rounded-md"
                 style={{
-                  background: 'var(--bg-card)',
-                  border: '1px solid var(--border-color)',
+                  background: '#3B82F6',
+                  border: '1px solid #3B82F6',
                   zIndex: -1,
                 }}
                 transition={{ type: 'spring', stiffness: 400, damping: 30 }}
@@ -1147,7 +1225,8 @@ export default function WalletPage() {
       <div className="flex flex-wrap gap-3">
         <motion.button
           className="btn-primary flex items-center gap-2"
-          whileHover={{ scale: 1.03 }}
+          style={BANKING_STYLES.btnPrimary}
+          whileHover={{ scale: 1.03, background: '#2563EB' }}
           whileTap={{ scale: 0.97 }}
           onClick={() => navigate(Pages.DEPOSIT)}
         >
@@ -1155,6 +1234,7 @@ export default function WalletPage() {
         </motion.button>
         <motion.button
           className="btn-secondary flex items-center gap-2"
+          style={BANKING_STYLES.btnSecondary}
           whileHover={{ scale: 1.03 }}
           whileTap={{ scale: 0.97 }}
           onClick={() => navigate(Pages.WITHDRAW)}
@@ -1163,6 +1243,7 @@ export default function WalletPage() {
         </motion.button>
         <motion.button
           className="btn-secondary flex items-center gap-2"
+          style={BANKING_STYLES.btnSecondary}
           whileHover={{ scale: 1.03 }}
           whileTap={{ scale: 0.97 }}
         >
@@ -1174,15 +1255,15 @@ export default function WalletPage() {
       {walletLoading ? <BalanceSkeleton /> : renderBalanceList()}
 
       {/* Recent transactions */}
-      <div className="glass-card">
+      <div className="transition-all duration-300" style={BANKING_STYLES.card}>
         <div className="flex items-center justify-between p-4 pb-0">
-          <h3 className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>
+          <h3 className="text-base font-semibold" style={{ color: '#1E293B' }}>
             Recent Transactions
           </h3>
           <button
             className="text-sm font-medium hover:underline"
             style={{
-              color: 'var(--accent-cyan)',
+              color: '#3B82F6',
               background: 'none',
               border: 'none',
               cursor: 'pointer',
@@ -1193,12 +1274,12 @@ export default function WalletPage() {
           </button>
         </div>
         {recentTx.length === 0 ? (
-          <div className="p-8 text-center" style={{ color: 'var(--text-muted)' }}>
+          <div className="p-8 text-center" style={{ color: '#94A3B8' }}>
             <p className="text-sm">No recent transactions</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="data-table">
+            <table className="data-table [&_th]:text-[#94A3B8] [&_th]:border-b-[#E2E8F0] [&_td]:text-[#1E293B] [&_td]:border-b-[#F1F5F9] [&_tr:hover]:bg-[#F8FAFC]" style={BANKING_STYLES.dataTable}>
               <thead>
                 <tr>
                   <th>Type</th>
@@ -1212,9 +1293,9 @@ export default function WalletPage() {
                 {recentTx.map((tx) => (
                   <tr key={tx.id}>
                     <td>
-                      <span className={`badge ${typeBadge(tx.type)}`}>{tx.type}</span>
+                      <span className="badge" style={typeBadgeStyle(tx.type)}>{tx.type}</span>
                     </td>
-                    <td className="font-medium" style={{ color: 'var(--text-primary)' }}>
+                    <td className="font-medium" style={{ color: '#1E293B' }}>
                       {tx.currency}
                     </td>
                     <td
@@ -1222,17 +1303,17 @@ export default function WalletPage() {
                       style={{
                         color:
                           tx.type === 'DEPOSIT' || tx.type === 'REFERRAL_BONUS'
-                            ? 'var(--accent-green)'
-                            : 'var(--accent-red)',
+                            ? '#10B981'
+                            : '#EF4444',
                       }}
                     >
                       {tx.type === 'DEPOSIT' || tx.type === 'REFERRAL_BONUS' ? '+' : '-'}
                       {formatAmount(tx.amount, tx.currency)}
                     </td>
                     <td>
-                      <span className={`badge ${statusBadge(tx.status)}`}>{tx.status}</span>
+                      <span className="badge" style={statusBadgeStyle(tx.status)}>{tx.status}</span>
                     </td>
-                    <td style={{ color: 'var(--text-muted)' }}>{formatDate(tx.createdAt)}</td>
+                    <td style={{ color: '#94A3B8' }}>{formatDate(tx.createdAt)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1257,10 +1338,10 @@ export default function WalletPage() {
       {/* Header (overview only) */}
       {isOverview && (
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>
+          <h1 className="text-2xl font-bold" style={{ color: '#1E293B' }}>
             Wallet
           </h1>
-          <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>
+          <p className="text-sm mt-1" style={{ color: '#94A3B8' }}>
             Manage your assets and transactions
           </p>
         </div>
@@ -1271,9 +1352,9 @@ export default function WalletPage() {
         <div
           className="flex items-center gap-2 p-3 rounded-xl text-sm"
           style={{
-            background: 'rgba(255, 61, 87, 0.1)',
-            color: 'var(--accent-red)',
-            border: '1px solid rgba(255, 61, 87, 0.2)',
+            background: 'rgba(239, 68, 68, 0.08)',
+            color: '#EF4444',
+            border: '1px solid rgba(239, 68, 68, 0.2)',
           }}
         >
           <AlertCircle size={16} /> {error}
@@ -1292,33 +1373,33 @@ export default function WalletPage() {
         <SummarySkeleton />
       ) : (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="stat-card">
-            <span className="text-xs font-medium block mb-1" style={{ color: 'var(--text-muted)' }}>
+          <div className="transition-all duration-200" style={BANKING_STYLES.statCard}>
+            <span className="text-xs font-medium block mb-1" style={{ color: '#94A3B8' }}>
               Total Assets
             </span>
-            <div className="stat-value text-xl sm:text-2xl">{formatUSD(totalEquity)}</div>
+            <div className="stat-value text-xl sm:text-2xl" style={{ color: '#1E293B' }}>{formatUSD(totalEquity)}</div>
           </div>
-          <div className="stat-card">
-            <span className="text-xs font-medium block mb-1" style={{ color: 'var(--text-muted)' }}>
+          <div className="transition-all duration-200" style={BANKING_STYLES.statCard}>
+            <span className="text-xs font-medium block mb-1" style={{ color: '#94A3B8' }}>
               Available
             </span>
-            <div className="text-xl sm:text-2xl font-bold" style={{ color: 'var(--accent-cyan)' }}>
+            <div className="text-xl sm:text-2xl font-bold" style={{ color: '#3B82F6' }}>
               {formatUSD(totalAvailable)}
             </div>
           </div>
-          <div className="stat-card">
-            <span className="text-xs font-medium block mb-1" style={{ color: 'var(--text-muted)' }}>
+          <div className="transition-all duration-200" style={BANKING_STYLES.statCard}>
+            <span className="text-xs font-medium block mb-1" style={{ color: '#94A3B8' }}>
               In Orders
             </span>
-            <div className="text-xl sm:text-2xl font-bold" style={{ color: 'var(--accent-amber)' }}>
+            <div className="text-xl sm:text-2xl font-bold" style={{ color: '#F59E0B' }}>
               {formatUSD(totalFrozen)}
             </div>
           </div>
-          <div className="stat-card">
-            <span className="text-xs font-medium block mb-1" style={{ color: 'var(--text-muted)' }}>
+          <div className="transition-all duration-200" style={BANKING_STYLES.statCard}>
+            <span className="text-xs font-medium block mb-1" style={{ color: '#94A3B8' }}>
               Today&apos;s P&amp;L
             </span>
-            <div className="text-xl sm:text-2xl font-bold" style={{ color: 'var(--accent-green)' }}>
+            <div className="text-xl sm:text-2xl font-bold" style={{ color: '#10B981' }}>
               $0.00
             </div>
           </div>
