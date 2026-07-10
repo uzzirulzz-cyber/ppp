@@ -1,0 +1,837 @@
+     1→'use client';
+     2→
+     3→import React, { useState, useEffect, useCallback } from 'react';
+     4→import { motion } from 'framer-motion';
+     5→import {
+     6→  AreaChart,
+     7→  Area,
+     8→  XAxis,
+     9→  YAxis,
+    10→  Tooltip,
+    11→  ResponsiveContainer,
+    12→} from 'recharts';
+    13→import {
+    14→  Wallet,
+    15→  CircleDollarSign,
+    16→  TrendingUp,
+    17→  Activity,
+    18→  BarChart3,
+    19→  RefreshCw,
+    20→  ArrowRight,
+    21→} from 'lucide-react';
+    22→import { useStore, Pages } from '@/store/useStore';
+    23→import { COINS, getBaseSymbol, formatPrice } from '@/lib/coins';
+    24→
+    25→// ── Types ──────────────────────────────────────────────────────────────────
+    26→
+    27→interface WalletBalance {
+    28→  currency: string;
+    29→  amount: number;
+    30→  frozen: number;
+    31→}
+    32→
+    33→interface WalletData {
+    34→  id: string;
+    35→  userId: string;
+    36→  type: string;
+    37→  status: string;
+    38→  totalEquity: number;
+    39→  balances: WalletBalance[];
+    40→}
+    41→
+    42→interface TradeRecord {
+    43→  _id: string;
+    44→  symbol: string;
+    45→  side: string;
+    46→  type: string;
+    47→  status: string;
+    48→  entryPrice: number;
+    49→  exitPrice: number | null;
+    50→  quantity: number;
+    51→  leverage: number;
+    52→  margin: number;
+    53→  pnl: number;
+    54→  pnlPercent: number;
+    55→  createdAt: string;
+    56→}
+    57→
+    58→interface TransactionRecord {
+    59→  _id: string;
+    60→  type: string;
+    61→  status: string;
+    62→  currency: string;
+    63→  amount: number;
+    64→  fee: number;
+    65→  description: string;
+    66→  createdAt: string;
+    67→}
+    68→
+    69→// ── Helpers ────────────────────────────────────────────────────────────────
+    70→
+    71→const fmt = (n: number) =>
+    72→  n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    73→
+    74→const fmtPrice = (n: number) => {
+    75→  if (n >= 1000) return '$' + fmt(n);
+    76→  if (n >= 1) return '$' + fmt(n);
+    77→  return '$' + n.toFixed(4);
+    78→};
+    79→
+    80→function generatePortfolioData(baseValue: number) {
+    81→  const data = [];
+    82→  let value = baseValue || 50000;
+    83→  if (value === 0) value = 50000;
+    84→  const now = new Date();
+    85→  for (let i = 29; i >= 0; i--) {
+    86→    const date = new Date(now);
+    87→    date.setDate(date.getDate() - i);
+    88→    value += (Math.random() - 0.45) * (value * 0.02);
+    89→    value = Math.max(value * 0.85, Math.min(value * 1.15, value));
+    90→    data.push({
+    91→      date: `${date.getMonth() + 1}/${date.getDate()}`,
+    92→      value: Math.round(value * 100) / 100,
+    93→    });
+    94→  }
+    95→  return data;
+    96→}
+    97→
+    98→// ── Chart Tooltip ──────────────────────────────────────────────────────────
+    99→
+   100→function ChartTooltip({
+   101→  active,
+   102→  payload,
+   103→  label,
+   104→}: {
+   105→  active?: boolean;
+   106→  payload?: Array<{ value: number }>;
+   107→  label?: string;
+   108→}) {
+   109→  if (active && payload && payload.length) {
+   110→    return (
+   111→      <div
+   112→        style={{
+   113→          background: 'rgba(10, 15, 26, 0.95)',
+   114→          border: '1px solid var(--border-color)',
+   115→          borderRadius: 8,
+   116→          padding: '10px 14px',
+   117→        }}
+   118→      >
+   119→        <p style={{ color: 'var(--text-muted)', fontSize: 12, marginBottom: 4 }}>
+   120→          {label}
+   121→        </p>
+   122→        <p style={{ color: '#fff', fontSize: 14, fontWeight: 600 }}>
+   123→          ${payload[0].value.toLocaleString()}
+   124→        </p>
+   125→      </div>
+   126→    );
+   127→  }
+   128→  return null;
+   129→}
+   130→
+   131→// ── Skeleton Loader ────────────────────────────────────────────────────────
+   132→
+   133→function Skeleton({ width = '100%', height = 20, rounded = 6 }: { width?: string; height?: number; rounded?: number }) {
+   134→  return (
+   135→    <div
+   136→      style={{
+   137→        width,
+   138→        height,
+   139→        borderRadius: rounded,
+   140→        background: 'linear-gradient(90deg, rgba(42,48,66,0.4) 25%, rgba(42,48,66,0.8) 50%, rgba(42,48,66,0.4) 75%)',
+   141→        backgroundSize: '200% 100%',
+   142→        animation: 'shimmer 1.5s infinite',
+   143→      }}
+   144→    />
+   145→  );
+   146→}
+   147→
+   148→function StatCardSkeleton() {
+   149→  return (
+   150→    <div className="stat-card">
+   151→      <div className="flex items-center justify-between mb-3">
+   152→        <Skeleton width={90} height={14} />
+   153→        <Skeleton width={40} height={40} rounded={10} />
+   154→      </div>
+   155→      <Skeleton width={140} height={28} />
+   156→      <Skeleton width={80} height={12} />
+   157→    </div>
+   158→  );
+   159→}
+   160→
+   161→// ── Variants ───────────────────────────────────────────────────────────────
+   162→
+   163→const containerVariants = {
+   164→  hidden: { opacity: 0 },
+   165→  show: { opacity: 1, transition: { staggerChildren: 0.06 } },
+   166→};
+   167→
+   168→const itemVariants = {
+   169→  hidden: { opacity: 0, y: 16 },
+   170→  show: { opacity: 1, y: 0, transition: { duration: 0.35, ease: 'easeOut' as const } },
+   171→};
+   172→
+   173→// ── Component ──────────────────────────────────────────────────────────────
+   174→
+   175→interface DashboardData {
+   176→  me: { id: string; name: string; role: string; status: string } | null;
+   177→  totalEquity: number;
+   178→  availableUSDT: number;
+   179→  frozenUSDT: number;
+   180→  totalPnl: number;
+   181→  activeTrades: number;
+   182→  totalTrades: number;
+   183→  trades: TradeRecord[];
+   184→  transactions: TransactionRecord[];
+   185→  portfolioData: Array<{ date: string; value: number }>;
+   186→}
+   187→
+   188→const initialData: DashboardData = {
+   189→  me: null,
+   190→  totalEquity: 0,
+   191→  availableUSDT: 0,
+   192→  frozenUSDT: 0,
+   193→  totalPnl: 0,
+   194→  activeTrades: 0,
+   195→  totalTrades: 0,
+   196→  trades: [],
+   197→  transactions: [],
+   198→  portfolioData: [],
+   199→};
+   200→
+   201→export default function DashboardPage() {
+   202→  const { token, user: storeUser, currentPage, navigate, setSelectedCoin } = useStore();
+   203→
+   204→  const [data, setData] = useState<DashboardData>(initialData);
+   205→  const [loading, setLoading] = useState(true);
+   206→  const [error, setError] = useState<string | null>(null);
+   207→
+   208→  const fetchAll = useCallback(async (currentToken: string) => {
+   209→    const headers = { Authorization: `Bearer ${currentToken}` };
+   210→
+   211→    try {
+   212→      setError(null);
+   213→      setLoading(true);
+   214→
+   215→      const [meRes, walletRes, tradesRes, txRes] = await Promise.all([
+   216→        fetch('/api/auth/me', { headers }).then((r) => r.json()),
+   217→        fetch('/api/wallet', { headers }).then((r) => r.json()),
+   218→        fetch('/api/trades?limit=5', { headers }).then((r) => r.json()),
+   219→        fetch('/api/wallet/transactions?limit=5', { headers }).then((r) => r.json()),
+   220→      ]);
+   221→
+   222→      // Build new state
+   223→      const next: DashboardData = { ...initialData, portfolioData: generatePortfolioData(0) };
+   224→
+   225→      // User info
+   226→      if (meRes.user) {
+   227→        next.me = meRes.user;
+   228→      }
+   229→
+   230→      // Wallet data
+   231→      if (walletRes.wallets) {
+   232→        const equity = walletRes.totalEquity || 0;
+   233→        next.totalEquity = equity;
+   234→
+   235→        let avail = 0;
+   236→        let frozen = 0;
+   237→        for (const w of walletRes.wallets as WalletData[]) {
+   238→          for (const b of w.balances) {
+   239→            if (b.currency === 'USDT') {
+   240→              avail += b.amount - b.frozen;
+   241→              frozen += b.frozen;
+   242→            }
+   243→          }
+   244→        }
+   245→        next.availableUSDT = avail;
+   246→        next.frozenUSDT = frozen;
+   247→        next.portfolioData = generatePortfolioData(equity);
+   248→      }
+   249→
+   250→      // Trades
+   251→      if (tradesRes.trades) {
+   252→        const tList = tradesRes.trades as TradeRecord[];
+   253→        next.trades = tList;
+   254→        next.totalTrades = tradesRes.pagination?.total ?? tList.length;
+   255→        next.activeTrades = tList.filter((t) => t.status === 'OPEN').length;
+   256→        next.totalPnl = tList
+   257→          .filter((t) => t.status === 'CLOSED' || t.status === 'LIQUIDATED')
+   258→          .reduce((sum, t) => sum + (t.pnl || 0), 0);
+   259→      }
+   260→
+   261→      // Transactions
+   262→      if (txRes.transactions) {
+   263→        next.transactions = txRes.transactions as TransactionRecord[];
+   264→      }
+   265→
+   266→      setData(next);
+   267→    } catch (err) {
+   268→      setError('Failed to load dashboard data. Please try again.');
+   269→      console.error('Dashboard fetch error:', err);
+   270→    } finally {
+   271→      setLoading(false);
+   272→    }
+   273→  }, []);
+   274→
+   275→  useEffect(() => {
+   276→    if (token) {
+   277→      fetchAll(token);
+   278→    }
+   279→    // eslint-disable-next-line react-hooks/exhaustive-deps
+   280→  }, [token, currentPage]);
+   281→
+   282→  // ── Render helpers ──
+   283→
+   284→  const { me, totalEquity, availableUSDT, frozenUSDT, totalPnl, activeTrades, totalTrades, trades, transactions, portfolioData } = data;
+   285→
+   286→  const displayName = me?.name || storeUser?.name || 'Trader';
+   287→  const shortUid = (me?.id || storeUser?.id || '').slice(0, 8) + '...';
+   288→  const userRole = me?.role || storeUser?.role || 'USER';
+   289→  const userStatus = me?.status || storeUser?.status || 'ACTIVE';
+   290→
+   291→  const pnlPositive = totalPnl >= 0;
+   292→
+   293→  const formatTime = (dateStr: string) => {
+   294→    try {
+   295→      const d = new Date(dateStr);
+   296→      return d.toLocaleString('en-US', {
+   297→        month: 'short',
+   298→        day: 'numeric',
+   299→        hour: '2-digit',
+   300→        minute: '2-digit',
+   301→      });
+   302→    } catch {
+   303→      return dateStr;
+   304→    }
+   305→  };
+   306→
+   307→  const statusBadge = (status: string) => {
+   308→    switch (status?.toUpperCase()) {
+   309→      case 'COMPLETED':
+   310→      case 'CLOSED':
+   311→        return <span className="badge badge-green">{status}</span>;
+   312→      case 'PENDING':
+   313→      case 'OPEN':
+   314→        return <span className="badge badge-amber">{status}</span>;
+   315→      case 'CANCELLED':
+   316→      case 'REJECTED':
+   317→      case 'FAILED':
+   318→        return <span className="badge badge-red">{status}</span>;
+   319→      case 'LIQUIDATED':
+   320→        return <span className="badge badge-red">{status}</span>;
+   321→      default:
+   322→        return <span className="badge badge-amber">{status}</span>;
+   323→    }
+   324→  };
+   325→
+   326→  // ── Render ──
+   327→
+   328→  if (error && !loading) {
+   329→    return (
+   330→      <div className="flex flex-col items-center justify-center" style={{ minHeight: 400 }}>
+   331→        <p style={{ color: 'var(--accent-red)', fontSize: 16, marginBottom: 16 }}>{error}</p>
+   332→        <button
+   333→          onClick={() => token && fetchAll(token)}
+   334→          className="btn-primary flex items-center gap-2"
+   335→        >
+   336→          <RefreshCw size={16} />
+   337→          Retry
+   338→        </button>
+   339→      </div>
+   340→    );
+   341→  }
+   342→
+   343→  return (
+   344→    <motion.div
+   345→      className="space-y-6 animate-fade-in"
+   346→      style={{ paddingBottom: 40 }}
+   347→      variants={containerVariants}
+   348→      initial="hidden"
+   349→      animate="show"
+   350→    >
+   351→      {/* Header */}
+   352→      <motion.div variants={itemVariants}>
+   353→        <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>
+   354→          Dashboard
+   355→        </h1>
+   356→        <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>
+   357→          Welcome back, <span className="gradient-text font-semibold">{displayName}</span>
+   358→        </p>
+   359→        {/* User Info Bar */}
+   360→        <div
+   361→          className="flex items-center gap-3 mt-2 px-3 py-1.5 rounded-lg text-xs"
+   362→          style={{
+   363→            background: 'var(--bg-card)',
+   364→            border: '1px solid var(--border-color)',
+   365→            color: 'var(--text-muted)',
+   366→            display: 'inline-flex',
+   367→          }}
+   368→        >
+   369→          <span>UID: {shortUid}</span>
+   370→          <span style={{ color: 'var(--border-color)' }}>|</span>
+   371→          <span>Role: {userRole}</span>
+   372→          <span style={{ color: 'var(--border-color)' }}>|</span>
+   373→          <span>Status: {userStatus}</span>
+   374→        </div>
+   375→      </motion.div>
+   376→
+   377→      {/* Top Stats Row */}
+   378→      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
+   379→        {loading ? (
+   380→          <>
+   381→            <StatCardSkeleton />
+   382→            <StatCardSkeleton />
+   383→            <StatCardSkeleton />
+   384→            <StatCardSkeleton />
+   385→            <StatCardSkeleton />
+   386→          </>
+   387→        ) : (
+   388→          <>
+   389→            {/* Total Assets */}
+   390→            <motion.div className="stat-card" variants={itemVariants}>
+   391→              <div className="flex items-center justify-between mb-3">
+   392→                <span className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
+   393→                  Total Assets
+   394→                </span>
+   395→                <div
+   396→                  className="flex items-center justify-center rounded-lg"
+   397→                  style={{ width: 40, height: 40, background: 'rgba(245, 180, 0, 0.15)' }}
+   398→                >
+   399→                  <Wallet size={20} style={{ color: 'var(--accent-gold)' }} />
+   400→                </div>
+   401→              </div>
+   402→              <div className="stat-value" style={{ color: 'var(--text-primary)' }}>
+   403→                ${fmt(totalEquity)}
+   404→              </div>
+   405→              <div className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+   406→                Total equity
+   407→              </div>
+   408→            </motion.div>
+   409→
+   410→            {/* Available Balance */}
+   411→            <motion.div className="stat-card" variants={itemVariants}>
+   412→              <div className="flex items-center justify-between mb-3">
+   413→                <span className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
+   414→                  Available Balance
+   415→                </span>
+   416→                <div
+   417→                  className="flex items-center justify-center rounded-lg"
+   418→                  style={{ width: 40, height: 40, background: 'rgba(0, 229, 255, 0.15)' }}
+   419→                >
+   420→                  <CircleDollarSign size={20} style={{ color: 'var(--accent-cyan)' }} />
+   421→                </div>
+   422→              </div>
+   423→              <div className="stat-value" style={{ color: 'var(--text-primary)' }}>
+   424→                ${fmt(availableUSDT)}
+   425→              </div>
+   426→              <div className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+   427→                USDT available
+   428→              </div>
+   429→            </motion.div>
+   430→
+   431→            {/* Total P&L */}
+   432→            <motion.div className="stat-card" variants={itemVariants}>
+   433→              <div className="flex items-center justify-between mb-3">
+   434→                <span className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
+   435→                  Total P&L
+   436→                </span>
+   437→                <div
+   438→                  className="flex items-center justify-center rounded-lg"
+   439→                  style={{
+   440→                    width: 40,
+   441→                    height: 40,
+   442→                    background: pnlPositive
+   443→                      ? 'rgba(0, 210, 106, 0.15)'
+   444→                      : 'rgba(255, 61, 87, 0.15)',
+   445→                  }}
+   446→                >
+   447→                  <TrendingUp
+   448→                    size={20}
+   449→                    style={{ color: pnlPositive ? 'var(--accent-green)' : 'var(--accent-red)' }}
+   450→                  />
+   451→                </div>
+   452→              </div>
+   453→              <div
+   454→                className="stat-value"
+   455→                style={{ color: pnlPositive ? 'var(--accent-green)' : 'var(--accent-red)' }}
+   456→              >
+   457→                {pnlPositive ? '+' : ''}${fmt(totalPnl)}
+   458→              </div>
+   459→              <div className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+   460→                From closed trades
+   461→              </div>
+   462→            </motion.div>
+   463→
+   464→            {/* Active Trades */}
+   465→            <motion.div className="stat-card" variants={itemVariants}>
+   466→              <div className="flex items-center justify-between mb-3">
+   467→                <span className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
+   468→                  Active Trades
+   469→                </span>
+   470→                <div
+   471→                  className="flex items-center justify-center rounded-lg"
+   472→                  style={{ width: 40, height: 40, background: 'rgba(245, 180, 0, 0.15)' }}
+   473→                >
+   474→                  <Activity size={20} style={{ color: '#f5b400' }} />
+   475→                </div>
+   476→              </div>
+   477→              <div className="stat-value" style={{ color: 'var(--text-primary)' }}>
+   478→                {activeTrades}
+   479→              </div>
+   480→              <div className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+   481→                Currently open
+   482→              </div>
+   483→            </motion.div>
+   484→
+   485→            {/* Total Trades */}
+   486→            <motion.div className="stat-card" variants={itemVariants}>
+   487→              <div className="flex items-center justify-between mb-3">
+   488→                <span className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
+   489→                  Total Trades
+   490→                </span>
+   491→                <div
+   492→                  className="flex items-center justify-center rounded-lg"
+   493→                  style={{ width: 40, height: 40, background: 'rgba(139, 92, 246, 0.15)' }}
+   494→                >
+   495→                  <BarChart3 size={20} style={{ color: '#8b5cf6' }} />
+   496→                </div>
+   497→              </div>
+   498→              <div className="stat-value" style={{ color: 'var(--text-primary)' }}>
+   499→                {totalTrades}
+   500→              </div>
+   501→              <div className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+   502→                All time
+   503→              </div>
+   504→            </motion.div>
+   505→          </>
+   506→        )}
+   507→      </div>
+   508→
+   509→      {/* Charts Row: Portfolio + Market Overview */}
+   510→      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+   511→        {/* Portfolio Chart */}
+   512→        <motion.div className="glass-card p-4 lg:col-span-2" variants={itemVariants}>
+   513→          <div className="flex items-center justify-between mb-4">
+   514→            <div>
+   515→              <h2 className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>
+   516→                Portfolio Value
+   517→              </h2>
+   518→              {totalEquity === 0 && !loading && (
+   519→                <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+   520→                  Sample data — deposit funds to see your real portfolio
+   521→                </p>
+   522→              )}
+   523→            </div>
+   524→            <span className="badge badge-green">30D</span>
+   525→          </div>
+   526→          {loading ? (
+   527→            <div style={{ width: '100%', height: 280 }}>
+   528→              <Skeleton width="100%" height={280} rounded={8} />
+   529→            </div>
+   530→          ) : (
+   531→            <div style={{ width: '100%', height: 280 }}>
+   532→              <ResponsiveContainer width="100%" height="100%">
+   533→                <AreaChart data={portfolioData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
+   534→                  <defs>
+   535→                    <linearGradient id="goldGradient" x1="0" y1="0" x2="0" y2="1">
+   536→                      <stop offset="0%" stopColor="#f5b400" stopOpacity={0.35} />
+   537→                      <stop offset="95%" stopColor="#f5b400" stopOpacity={0} />
+   538→                    </linearGradient>
+   539→                  </defs>
+   540→                  <XAxis
+   541→                    dataKey="date"
+   542→                    axisLine={false}
+   543→                    tickLine={false}
+   544→                    tick={{ fill: 'var(--text-muted)', fontSize: 11 }}
+   545→                    interval={4}
+   546→                  />
+   547→                  <YAxis
+   548→                    axisLine={false}
+   549→                    tickLine={false}
+   550→                    tick={{ fill: 'var(--text-muted)', fontSize: 11 }}
+   551→                    tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`}
+   552→                    domain={['dataMin - 5000', 'dataMax + 5000']}
+   553→                  />
+   554→                  <Tooltip content={<ChartTooltip />} />
+   555→                  <Area
+   556→                    type="monotone"
+   557→                    dataKey="value"
+   558→                    stroke="#f5b400"
+   559→                    strokeWidth={2}
+   560→                    fill="url(#goldGradient)"
+   561→                    isAnimationActive={false}
+   562→                  />
+   563→                </AreaChart>
+   564→              </ResponsiveContainer>
+   565→            </div>
+   566→          )}
+   567→        </motion.div>
+   568→
+   569→        {/* Market Overview */}
+   570→        <motion.div className="glass-card p-4" variants={itemVariants}>
+   571→          <div className="flex items-center justify-between mb-4">
+   572→            <h2 className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>
+   573→              Market Overview
+   574→            </h2>
+   575→            <button
+   576→              className="text-sm font-medium hover:underline"
+   577→              style={{ color: 'var(--accent-cyan)', background: 'none', border: 'none', cursor: 'pointer' }}
+   578→              onClick={() => navigate(Pages.MARKETS)}
+   579→            >
+   580→              View All
+   581→            </button>
+   582→          </div>
+   583→          <div className="space-y-1 max-h-[320px] overflow-y-auto pr-1">
+   584→            {COINS.slice(0, 8).map((coin) => {
+   585→              const base = getBaseSymbol(coin.symbol);
+   586→              const pairLabel = `${base}/USDT`;
+   587→              const isPositive = coin.change24h >= 0;
+   588→              return (
+   589→                <div
+   590→                  key={coin.symbol}
+   591→                  className="flex items-center justify-between py-2.5 px-2 rounded-lg transition-colors"
+   592→                  style={{ cursor: 'pointer' }}
+   593→                  onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-secondary)')}
+   594→                  onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+   595→                  onClick={() => {
+   596→                    setSelectedCoin(coin.symbol);
+   597→                    navigate(Pages.TRADING);
+   598→                  }}
+   599→                >
+   600→                  <div className="flex items-center gap-3">
+   601→                    <div
+   602→                      className="flex items-center justify-center rounded-full"
+   603→                      style={{
+   604→                        width: 36,
+   605→                        height: 36,
+   606→                        background: `${coin.color}20`,
+   607→                        fontSize: 13,
+   608→                        fontWeight: 700,
+   609→                        color: coin.color,
+   610→                      }}
+   611→                    >
+   612→                      {coin.icon}
+   613→                    </div>
+   614→                    <div>
+   615→                      <div className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+   616→                        {pairLabel}
+   617→                      </div>
+   618→                    </div>
+   619→                  </div>
+   620→                  <div className="text-right">
+   621→                    <div className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
+   622→                      {fmtPrice(coin.price)}
+   623→                    </div>
+   624→                    <div
+   625→                      className="text-xs font-medium"
+   626→                      style={{ color: isPositive ? 'var(--accent-green)' : 'var(--accent-red)' }}
+   627→                    >
+   628→                      {isPositive ? '+' : ''}
+   629→                      {coin.change24h.toFixed(2)}%
+   630→                    </div>
+   631→                  </div>
+   632→                </div>
+   633→              );
+   634→            })}
+   635→          </div>
+   636→        </motion.div>
+   637→      </div>
+   638→
+   639→      {/* Recent Trades Table */}
+   640→      <motion.div className="glass-card" variants={itemVariants}>
+   641→        <div className="flex items-center justify-between p-4 pb-0">
+   642→          <h2 className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>
+   643→            Recent Trades
+   644→          </h2>
+   645→          <button
+   646→            className="text-sm font-medium hover:underline"
+   647→            style={{ color: 'var(--accent-cyan)', background: 'none', border: 'none', cursor: 'pointer' }}
+   648→            onClick={() => navigate(Pages.HISTORY)}
+   649→          >
+   650→            View All
+   651→          </button>
+   652→        </div>
+   653→        {loading ? (
+   654→          <div className="p-4 space-y-3">
+   655→            <Skeleton width="100%" height={16} />
+   656→            <Skeleton width="100%" height={16} />
+   657→            <Skeleton width="100%" height={16} />
+   658→            <Skeleton width="100%" height={16} />
+   659→          </div>
+   660→        ) : trades.length === 0 ? (
+   661→          <div className="flex flex-col items-center justify-center py-12 px-4">
+   662→            <p className="text-sm mb-4" style={{ color: 'var(--text-muted)' }}>
+   663→              No trades yet. Start trading now!
+   664→            </p>
+   665→            <button className="btn-primary flex items-center gap-2" onClick={() => navigate(Pages.TRADING)}>
+   666→              Start Trading
+   667→              <ArrowRight size={16} />
+   668→            </button>
+   669→          </div>
+   670→        ) : (
+   671→          <div className="overflow-x-auto">
+   672→            <table className="data-table">
+   673→              <thead>
+   674→                <tr>
+   675→                  <th>Pair</th>
+   676→                  <th>Side</th>
+   677→                  <th>Entry Price</th>
+   678→                  <th>Quantity</th>
+   679→                  <th>P&L</th>
+   680→                  <th>Status</th>
+   681→                  <th>Time</th>
+   682→                </tr>
+   683→              </thead>
+   684→              <tbody>
+   685→                {trades.map((trade) => {
+   686→                  const tradePnl = trade.pnl || 0;
+   687→                  const isProfit = tradePnl >= 0;
+   688→                  return (
+   689→                    <tr key={trade._id}>
+   690→                      <td>
+   691→                        <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>
+   692→                          {trade.symbol}
+   693→                        </span>
+   694→                      </td>
+   695→                      <td>
+   696→                        <span className={`badge ${trade.side === 'BUY' ? 'badge-green' : 'badge-red'}`}>
+   697→                          {trade.side}
+   698→                        </span>
+   699→                      </td>
+   700→                      <td style={{ color: 'var(--text-primary)' }}>
+   701→                        ${fmt(trade.entryPrice)}
+   702→                      </td>
+   703→                      <td style={{ color: 'var(--text-secondary)' }}>
+   704→                        {trade.quantity}
+   705→                      </td>
+   706→                      <td>
+   707→                        <span
+   708→                          style={{
+   709→                            fontWeight: 600,
+   710→                            color:
+   711→                              trade.status === 'OPEN'
+   712→                                ? 'var(--text-muted)'
+   713→                                : isProfit
+   714→                                  ? 'var(--accent-green)'
+   715→                                  : 'var(--accent-red)',
+   716→                          }}
+   717→                        >
+   718→                          {trade.status === 'OPEN' ? '—' : `${isProfit ? '+' : ''}$${fmt(tradePnl)}`}
+   719→                        </span>
+   720→                      </td>
+   721→                      <td>{statusBadge(trade.status)}</td>
+   722→                      <td style={{ color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+   723→                        {formatTime(trade.createdAt)}
+   724→                      </td>
+   725→                    </tr>
+   726→                  );
+   727→                })}
+   728→              </tbody>
+   729→            </table>
+   730→          </div>
+   731→        )}
+   732→      </motion.div>
+   733→
+   734→      {/* Recent Transactions Table */}
+   735→      <motion.div className="glass-card" variants={itemVariants}>
+   736→        <div className="flex items-center justify-between p-4 pb-0">
+   737→          <h2 className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>
+   738→            Recent Transactions
+   739→          </h2>
+   740→          <button
+   741→            className="text-sm font-medium hover:underline"
+   742→            style={{ color: 'var(--accent-cyan)', background: 'none', border: 'none', cursor: 'pointer' }}
+   743→            onClick={() => navigate(Pages.TRANSACTIONS)}
+   744→          >
+   745→            View All
+   746→          </button>
+   747→        </div>
+   748→        {loading ? (
+   749→          <div className="p-4 space-y-3">
+   750→            <Skeleton width="100%" height={16} />
+   751→            <Skeleton width="100%" height={16} />
+   752→            <Skeleton width="100%" height={16} />
+   753→            <Skeleton width="100%" height={16} />
+   754→          </div>
+   755→        ) : transactions.length === 0 ? (
+   756→          <div className="flex flex-col items-center justify-center py-12 px-4">
+   757→            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+   758→              No transactions yet.
+   759→            </p>
+   760→          </div>
+   761→        ) : (
+   762→          <div className="overflow-x-auto">
+   763→            <table className="data-table">
+   764→              <thead>
+   765→                <tr>
+   766→                  <th>Date</th>
+   767→                  <th>Type</th>
+   768→                  <th>Currency</th>
+   769→                  <th>Amount</th>
+   770→                  <th>Status</th>
+   771→                  <th>Description</th>
+   772→                </tr>
+   773→              </thead>
+   774→              <tbody>
+   775→                {transactions.map((tx) => (
+   776→                  <tr key={tx._id}>
+   777→                    <td style={{ color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+   778→                      {formatTime(tx.createdAt)}
+   779→                    </td>
+   780→                    <td>
+   781→                      <span
+   782→                        className="badge"
+   783→                        style={{
+   784→                          background:
+   785→                            tx.type === 'DEPOSIT'
+   786→                              ? 'rgba(0, 210, 106, 0.15)'
+   787→                              : tx.type === 'WITHDRAW'
+   788→                                ? 'rgba(255, 61, 87, 0.15)'
+   789→                                : 'rgba(0, 229, 255, 0.15)',
+   790→                          color:
+   791→                            tx.type === 'DEPOSIT'
+   792→                              ? 'var(--accent-green)'
+   793→                              : tx.type === 'WITHDRAW'
+   794→                                ? 'var(--accent-red)'
+   795→                                : 'var(--accent-cyan)',
+   796→                        }}
+   797→                      >
+   798→                        {tx.type}
+   799→                      </span>
+   800→                    </td>
+   801→                    <td style={{ color: 'var(--text-primary)' }}>{tx.currency}</td>
+   802→                    <td style={{ color: 'var(--text-primary)' }}>
+   803→                      {tx.type === 'WITHDRAW' ? '-' : '+'}{fmt(tx.amount)}
+   804→                    </td>
+   805→                    <td>{statusBadge(tx.status)}</td>
+   806→                    <td
+   807→                      style={{ color: 'var(--text-secondary)', maxWidth: 200 }}
+   808→                      className="truncate"
+   809→                    >
+   810→                      {tx.description || '—'}
+   811→                    </td>
+   812→                  </tr>
+   813→                ))}
+   814→              </tbody>
+   815→            </table>
+   816→          </div>
+   817→        )}
+   818→      </motion.div>
+   819→
+   820→      {/* Quick Actions Row */}
+   821→      <motion.div className="flex flex-wrap gap-3" variants={itemVariants}>
+   822→        <button className="btn-gold flex items-center gap-2" onClick={() => navigate(Pages.DEPOSIT)}>
+   823→          Deposit Funds
+   824→          <ArrowRight size={16} />
+   825→        </button>
+   826→        <button className="btn-primary flex items-center gap-2" onClick={() => navigate(Pages.TRADING)}>
+   827→          Start Trading
+   828→          <ArrowRight size={16} />
+   829→        </button>
+   830→        <button className="btn-secondary flex items-center gap-2" onClick={() => navigate(Pages.HISTORY)}>
+   831→          View History
+   832→          <ArrowRight size={16} />
+   833→        </button>
+   834→      </motion.div>
+   835→    </motion.div>
+   836→  );
+   837→}

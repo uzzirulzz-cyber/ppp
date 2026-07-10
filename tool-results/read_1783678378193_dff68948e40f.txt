@@ -1,0 +1,1583 @@
+     1→'use client';
+     2→
+     3→import React, { useState, useEffect, useMemo, useCallback } from 'react';
+     4→import { useStore, Pages } from '@/store/useStore';
+     5→import {
+     6→  AreaChart,
+     7→  Area,
+     8→  XAxis,
+     9→  YAxis,
+    10→  Tooltip,
+    11→  ResponsiveContainer,
+    12→  CartesianGrid,
+    13→} from 'recharts';
+    14→import {
+    15→  ArrowUpRight,
+    16→  ArrowDownRight,
+    17→  ChevronDown,
+    18→  ChevronLeft,
+    19→  Loader2,
+    20→  RefreshCw,
+    21→  TrendingUp,
+    22→  TrendingDown,
+    23→} from 'lucide-react';
+    24→
+    25→// ─── Constants ───
+    26→
+    27→const COINS = [
+    28→  { symbol: 'BTCUSDT', name: 'BTC/USDT', basePrice: 67245.3, decimals: 2 },
+    29→  { symbol: 'ETHUSDT', name: 'ETH/USDT', basePrice: 3856.42, decimals: 2 },
+    30→  { symbol: 'BNBUSDT', name: 'BNB/USDT', basePrice: 612.85, decimals: 2 },
+    31→  { symbol: 'SOLUSDT', name: 'SOL/USDT', basePrice: 178.36, decimals: 2 },
+    32→  { symbol: 'XRPUSDT', name: 'XRP/USDT', basePrice: 2.4215, decimals: 4 },
+    33→  { symbol: 'ADAUSDT', name: 'ADA/USDT', basePrice: 0.9847, decimals: 4 },
+    34→  { symbol: 'DOGEUSDT', name: 'DOGE/USDT', basePrice: 0.3821, decimals: 4 },
+    35→  { symbol: 'DOTUSDT', name: 'DOT/USDT', basePrice: 8.463, decimals: 3 },
+    36→];
+    37→
+    38→const TIMEFRAMES = ['1m', '5m', '15m', '1H', '4H', '1D', '1W'];
+    39→const ORDER_TYPES = ['Market', 'Limit', 'Stop'] as const;
+    40→const DURATIONS = ['30s', '1m', '5m', '15m', '30m', '1H'];
+    41→
+    42→// ─── Helpers ───
+    43→
+    44→function getCoinInfo(symbol: string) {
+    45→  return COINS.find((c) => c.symbol === symbol) || COINS[0];
+    46→}
+    47→
+    48→function generatePriceData(coin: (typeof COINS)[number], timeframe: string) {
+    49→  const data: { time: string; price: number; volume: number }[] = [];
+    50→  let price = coin.basePrice;
+    51→  const now = Date.now();
+    52→  let intervalMs = 60_000;
+    53→  let count = 120;
+    54→  let formatTime: (d: Date) => string;
+    55→
+    56→  switch (timeframe) {
+    57→    case '1m':
+    58→      intervalMs = 10_000;
+    59→      count = 120;
+    60→      formatTime = (d) => `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
+    61→      break;
+    62→    case '5m':
+    63→      intervalMs = 30_000;
+    64→      count = 100;
+    65→      formatTime = (d) => `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
+    66→      break;
+    67→    case '15m':
+    68→      intervalMs = 60_000;
+    69→      count = 90;
+    70→      formatTime = (d) => `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
+    71→      break;
+    72→    case '1H':
+    73→      intervalMs = 300_000;
+    74→      count = 72;
+    75→      formatTime = (d) => `${d.getHours()}:00`;
+    76→      break;
+    77→    case '4H':
+    78→      intervalMs = 900_000;
+    79→      count = 48;
+    80→      formatTime = (d) => `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:00`;
+    81→      break;
+    82→    case '1D':
+    83→      intervalMs = 3_600_000;
+    84→      count = 60;
+    85→      formatTime = (d) => `${d.getMonth() + 1}/${d.getDate()}`;
+    86→      break;
+    87→    case '1W':
+    88→    default:
+    89→      intervalMs = 21_600_000;
+    90→      count = 50;
+    91→      formatTime = (d) => `${d.getMonth() + 1}/${d.getDate()}`;
+    92→      break;
+    93→  }
+    94→
+    95→  const volatility = coin.basePrice * 0.001;
+    96→
+    97→  for (let i = count; i >= 0; i--) {
+    98→    const date = new Date(now - i * intervalMs);
+    99→    price += (Math.random() - 0.48) * volatility;
+   100→    price = Math.max(coin.basePrice * 0.95, Math.min(coin.basePrice * 1.05, price));
+   101→    data.push({
+   102→      time: formatTime(date),
+   103→      price: parseFloat(price.toFixed(coin.decimals)),
+   104→      volume: parseFloat((Math.random() * 500 + 100).toFixed(2)),
+   105→    });
+   106→  }
+   107→
+   108→  return data;
+   109→}
+   110→
+   111→function generateOrderBook(currentPrice: number, decimals: number) {
+   112→  const asks = [];
+   113→  const bids = [];
+   114→  const step = currentPrice * 0.0003;
+   115→
+   116→  for (let i = 0; i < 8; i++) {
+   117→    asks.push({
+   118→      price: parseFloat((currentPrice + step * (i + 1)).toFixed(decimals)),
+   119→      amount: parseFloat((Math.random() * 3 + 0.1).toFixed(4)),
+   120→    });
+   121→    bids.push({
+   122→      price: parseFloat((currentPrice - step * (i + 1)).toFixed(decimals)),
+   123→      amount: parseFloat((Math.random() * 3 + 0.1).toFixed(4)),
+   124→    });
+   125→  }
+   126→
+   127→  asks.sort((a, b) => b.price - a.price);
+   128→  bids.sort((a, b) => b.price - a.price);
+   129→
+   130→  return { asks, bids };
+   131→}
+   132→
+   133→function generateRecentTrades(currentPrice: number, decimals: number) {
+   134→  const trades = [];
+   135→  const now = new Date();
+   136→  for (let i = 0; i < 15; i++) {
+   137→    const isBuy = Math.random() > 0.5;
+   138→    trades.push({
+   139→      time: new Date(now.getTime() - i * (Math.random() * 30000 + 5000)).toLocaleTimeString(),
+   140→      price: parseFloat((currentPrice + (Math.random() - 0.5) * currentPrice * 0.001).toFixed(decimals)),
+   141→      amount: parseFloat((Math.random() * 2 + 0.01).toFixed(4)),
+   142→      isBuy,
+   143→    });
+   144→  }
+   145→  return trades;
+   146→}
+   147→
+   148→function formatPrice(price: number, decimals: number) {
+   149→  return price.toLocaleString('en-US', {
+   150→    minimumFractionDigits: decimals,
+   151→    maximumFractionDigits: decimals,
+   152→  });
+   153→}
+   154→
+   155→function formatUSD(value: number) {
+   156→  return value.toLocaleString('en-US', {
+   157→    minimumFractionDigits: 2,
+   158→    maximumFractionDigits: 2,
+   159→  });
+   160→}
+   161→
+   162→// ─── Custom Tooltip ───
+   163→
+   164→function ChartTooltip({
+   165→  active,
+   166→  payload,
+   167→  label,
+   168→  decimals,
+   169→}: {
+   170→  active?: boolean;
+   171→  payload?: Array<{ value: number }>;
+   172→  label?: string;
+   173→  decimals: number;
+   174→}) {
+   175→  if (!active || !payload || !payload.length) return null;
+   176→  return (
+   177→    <div
+   178→      style={{
+   179→        background: '#171c28',
+   180→        border: '1px solid #2a3042',
+   181→        borderRadius: 8,
+   182→        padding: '8px 12px',
+   183→        fontSize: 13,
+   184→      }}
+   185→    >
+   186→      <div style={{ color: '#6b7a8d', marginBottom: 4 }}>{label}</div>
+   187→      <div style={{ color: '#ffffff', fontWeight: 600 }}>
+   188→        ${formatPrice(payload[0].value, decimals)}
+   189→      </div>
+   190→    </div>
+   191→  );
+   192→}
+   193→
+   194→// ─── Main Component ───
+   195→
+   196→export default function TradingPage() {
+   197→  const { token, navigate, goBack, selectedCoin, setSelectedCoin } = useStore();
+   198→
+   199→  // Local state
+   200→  const [coinDropdownOpen, setCoinDropdownOpen] = useState(false);
+   201→  const [timeframe, setTimeframe] = useState('1H');
+   202→  const [orderType, setOrderType] = useState<(typeof ORDER_TYPES)[number]>('Market');
+   203→  const [amount, setAmount] = useState('');
+   204→  const [limitPrice, setLimitPrice] = useState('');
+   205→  const [stopPrice, setStopPrice] = useState('');
+   206→  const [leverage, setLeverage] = useState(1);
+   207→  const [duration, setDuration] = useState('5m');
+   208→  const [activeTab, setActiveTab] = useState<'orderbook' | 'trades'>('orderbook');
+   209→  const [submitting, setSubmitting] = useState(false);
+   210→  const [submitSide, setSubmitSide] = useState<'BUY' | 'SELL' | null>(null);
+   211→  const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+   212→
+   213→  // Data state
+   214→  const [walletBalance, setWalletBalance] = useState(0);
+   215→  const [walletLoading, setWalletLoading] = useState(true);
+   216→  const [currentPrice, setCurrentPrice] = useState(COINS[0].basePrice);
+   217→  const [priceChange24h, setPriceChange24h] = useState(0);
+   218→  const [priceSeed, setPriceSeed] = useState(0);
+   219→
+   220→  // Computed coin info
+   221→  const activeCoin = getCoinInfo(selectedCoin || 'BTCUSDT');
+   222→
+   223→  // Reset price and form when coin changes (via event handler, not effect)
+   224→  const prevCoinRef = React.useRef(selectedCoin);
+   225→  React.useEffect(() => {
+   226→    if (prevCoinRef.current !== selectedCoin) {
+   227→      prevCoinRef.current = selectedCoin;
+   228→      const coin = getCoinInfo(selectedCoin || 'BTCUSDT');
+   229→      // Use timeout to avoid synchronous setState in effect
+   230→      const handle = setTimeout(() => {
+   231→        setCurrentPrice(coin.basePrice);
+   232→        setPriceChange24h(parseFloat(((Math.random() - 0.4) * 5).toFixed(2)));
+   233→        setPriceSeed(Math.random());
+   234→        setAmount('');
+   235→        setLimitPrice('');
+   236→        setStopPrice('');
+   237→      }, 0);
+   238→      return () => clearTimeout(handle);
+   239→    }
+   240→  }, [selectedCoin]);
+   241→
+   242→  // Generate chart data (re-generate on coin/timeframe/seed change)
+   243→  const chartData = useMemo(
+   244→    () => generatePriceData(activeCoin, timeframe),
+   245→    // eslint-disable-next-line react-hooks/exhaustive-deps
+   246→    [activeCoin, timeframe, priceSeed]
+   247→  );
+   248→
+   249→  // Generate order book
+   250→  const orderBook = useMemo(
+   251→    () => generateOrderBook(currentPrice, activeCoin.decimals),
+   252→    [currentPrice, activeCoin.decimals]
+   253→  );
+   254→
+   255→  // Generate recent trades
+   256→  const recentTrades = useMemo(
+   257→    () => generateRecentTrades(currentPrice, activeCoin.decimals),
+   258→    [currentPrice, activeCoin.decimals]
+   259→  );
+   260→
+   261→  // Simulate live price tick
+   262→  useEffect(() => {
+   263→    const interval = setInterval(() => {
+   264→      setCurrentPrice((prev) => {
+   265→        const tick = prev * (1 + (Math.random() - 0.5) * 0.0003);
+   266→        return parseFloat(tick.toFixed(activeCoin.decimals));
+   267→      });
+   268→    }, 2000);
+   269→    return () => clearInterval(interval);
+   270→  }, [activeCoin.decimals]);
+   271→
+   272→  // Fetch wallet balance via GET /api/wallet
+   273→  useEffect(() => {
+   274→    let cancelled = false;
+   275→    const load = async () => {
+   276→      if (!token) return;
+   277→      const handle = setTimeout(async () => {
+   278→        if (cancelled) return;
+   279→        setWalletLoading(true);
+   280→        try {
+   281→          const res = await fetch('/api/wallet', {
+   282→            headers: { Authorization: `Bearer ${token}` },
+   283→          });
+   284→          if (res.ok && !cancelled) {
+   285→            const data = await res.json();
+   286→            const usdt = data.balances?.find(
+   287→              (b: { currency: string; amount: number }) => b.currency === 'USDT'
+   288→            );
+   289→            setWalletBalance(usdt?.amount || 0);
+   290→          }
+   291→        } catch {
+   292→          // Silent fail
+   293→        } finally {
+   294→          if (!cancelled) setWalletLoading(false);
+   295→        }
+   296→      }, 0);
+   297→      return () => clearTimeout(handle);
+   298→    };
+   299→    load();
+   300→    return () => { cancelled = true; };
+   301→  }, [token]);
+   302→
+   303→  // Expose fetchWallet for manual refresh after trade
+   304→  const fetchWallet = useCallback(async () => {
+   305→    if (!token) return;
+   306→    setWalletLoading(true);
+   307→    try {
+   308→      const res = await fetch('/api/wallet', {
+   309→        headers: { Authorization: `Bearer ${token}` },
+   310→      });
+   311→      if (res.ok) {
+   312→        const data = await res.json();
+   313→        const usdt = data.balances?.find(
+   314→          (b: { currency: string; amount: number }) => b.currency === 'USDT'
+   315→        );
+   316→        setWalletBalance(usdt?.amount || 0);
+   317→      }
+   318→    } catch {
+   319→      // Silent fail
+   320→    } finally {
+   321→      setWalletLoading(false);
+   322→    }
+   323→  }, [token]);
+   324→
+   325→  // Toast auto-dismiss
+   326→  useEffect(() => {
+   327→    if (toast) {
+   328→      const timer = setTimeout(() => setToast(null), 4000);
+   329→      return () => clearTimeout(timer);
+   330→    }
+   331→  }, [toast]);
+   332→
+   333→  // Derived values
+   334→  const amountNum = parseFloat(amount) || 0;
+   335→  const priceNum = currentPrice;
+   336→  const notionalValue = amountNum * priceNum;
+   337→  const actualMargin = notionalValue / leverage;
+   338→  const maxTradeSize = walletBalance > 0 ? walletBalance : 0;
+   339→
+   340→  // Estimated P&L calculation
+   341→  const estimatedPnl = useMemo(() => {
+   342→    if (amountNum <= 0 || priceNum <= 0) return 0;
+   343→    const durationMultiplier: Record<string, number> = {
+   344→      '30s': 0.002,
+   345→      '1m': 0.005,
+   346→      '5m': 0.015,
+   347→      '15m': 0.03,
+   348→      '30m': 0.05,
+   349→      '1H': 0.08,
+   350→    };
+   351→    const movement = durationMultiplier[duration] || 0.015;
+   352→    const estProfit = notionalValue * movement * leverage * 0.5;
+   353→    return estProfit;
+   354→  }, [amountNum, priceNum, leverage, duration, notionalValue]);
+   355→
+   356→  // Handle trade submission — POST to /api/trades
+   357→  const handleSubmitTrade = async (side: 'BUY' | 'SELL') => {
+   358→    if (!token) {
+   359→      setToast({ type: 'error', message: 'Please login to place trades' });
+   360→      return;
+   361→    }
+   362→
+   363→    const tradeAmount = parseFloat(amount);
+   364→    if (!tradeAmount || tradeAmount <= 0) {
+   365→      setToast({ type: 'error', message: 'Please enter a valid amount' });
+   366→      return;
+   367→    }
+   368→
+   369→    if (orderType === 'Limit') {
+   370→      const lp = parseFloat(limitPrice);
+   371→      if (!lp || lp <= 0) {
+   372→        setToast({ type: 'error', message: 'Please enter a valid limit price' });
+   373→        return;
+   374→      }
+   375→    }
+   376→
+   377→    if (orderType === 'Stop') {
+   378→      const sp = parseFloat(stopPrice);
+   379→      if (!sp || sp <= 0) {
+   380→        setToast({ type: 'error', message: 'Please enter a valid stop price' });
+   381→        return;
+   382→      }
+   383→    }
+   384→
+   385→    setSubmitting(true);
+   386→    setSubmitSide(side);
+   387→
+   388→    try {
+   389→      const body: Record<string, unknown> = {
+   390→        symbol: activeCoin.symbol,
+   391→        side,
+   392→        type: orderType === 'Stop' ? 'MARKET' : orderType.toUpperCase(),
+   393→        quantity: tradeAmount,
+   394→        leverage,
+   395→      };
+   396→
+   397→      // For MARKET orders, include the current market price
+   398→      if (orderType === 'Market' || orderType === 'Stop') {
+   399→        body.price = currentPrice;
+   400→      }
+   401→
+   402→      // For LIMIT orders, include the user-specified limit price
+   403→      if (orderType === 'Limit') {
+   404→        body.type = 'LIMIT';
+   405→        body.price = parseFloat(limitPrice);
+   406→      }
+   407→
+   408→      const res = await fetch('/api/trades', {
+   409→        method: 'POST',
+   410→        headers: {
+   411→          'Content-Type': 'application/json',
+   412→          Authorization: `Bearer ${token}`,
+   413→        },
+   414→        body: JSON.stringify(body),
+   415→      });
+   416→
+   417→      const data = await res.json();
+   418→
+   419→      if (res.ok) {
+   420→        // Success: show toast, reset form, refresh wallet balance
+   421→        setToast({
+   422→          type: 'success',
+   423→          message: `${side === 'BUY' ? 'BUY UP' : 'SELL DOWN'} ${activeCoin.name} placed successfully!`,
+   424→        });
+   425→        // Reset form fields
+   426→        setAmount('');
+   427→        setLimitPrice('');
+   428→        setStopPrice('');
+   429→        // Refresh wallet balance
+   430→        await fetchWallet();
+   431→      } else {
+   432→        // Error: show the error message, do NOT reset the form
+   433→        setToast({
+   434→          type: 'error',
+   435→          message: data.error || 'Trade failed. Please try again.',
+   436→        });
+   437→      }
+   438→    } catch {
+   439→      setToast({
+   440→        type: 'error',
+   441→        message: 'Network error. Please check your connection.',
+   442→      });
+   443→    } finally {
+   444→      setSubmitting(false);
+   445→      setSubmitSide(null);
+   446→    }
+   447→  };
+   448→
+   449→  // Handle clicking a market coin row in the sidebar
+   450→  const handleCoinRowClick = (symbol: string) => {
+   451→    setSelectedCoin(symbol);
+   452→  };
+   453→
+   454→  // Quick amount buttons
+   455→  const quickAmounts = [25, 50, 75, 100];
+   456→  const handleQuickAmount = (pct: number) => {
+   457→    if (maxTradeSize <= 0) return;
+   458→    const usdtAmount = (maxTradeSize * pct) / 100;
+   459→    const qty = usdtAmount / priceNum;
+   460→    setAmount(qty.toFixed(activeCoin.decimals > 2 ? 4 : 2));
+   461→  };
+   462→
+   463→  const priceDecimals = activeCoin.decimals;
+   464→  const isPositive = priceChange24h >= 0;
+   465→
+   466→  return (
+   467→    <div style={{ minHeight: 'calc(100vh - 64px)', padding: '16px 20px', background: 'var(--bg-primary)' }}>
+   468→      {/* Toast Notification */}
+   469→      {toast && (
+   470→        <div
+   471→          style={{
+   472→            position: 'fixed',
+   473→            top: 80,
+   474→            right: 20,
+   475→            zIndex: 9999,
+   476→            padding: '14px 20px',
+   477→            borderRadius: 12,
+   478→            background: toast.type === 'success' ? '#0d3320' : '#3d0f0f',
+   479→            border: `1px solid ${toast.type === 'success' ? '#00d26a' : '#ff3d57'}`,
+   480→            color: toast.type === 'success' ? '#00d26a' : '#ff3d57',
+   481→            fontSize: 14,
+   482→            fontWeight: 500,
+   483→            boxShadow: `0 8px 32px ${toast.type === 'success' ? 'rgba(0,210,106,0.15)' : 'rgba(255,61,87,0.15)'}`,
+   484→            animation: 'slideIn 0.3s ease-out',
+   485→          }}
+   486→        >
+   487→          {toast.type === 'success' ? '✓' : '✕'} {toast.message}
+   488→        </div>
+   489→      )}
+   490→
+   491→      {/* Coin Selector Header */}
+   492→      <div
+   493→        style={{
+   494→          display: 'flex',
+   495→          alignItems: 'center',
+   496→          gap: 16,
+   497→          marginBottom: 16,
+   498→          flexWrap: 'wrap',
+   499→        }}
+   500→      >
+   501→        {/* Back Button */}
+   502→        <button
+   503→          onClick={goBack}
+   504→          style={{
+   505→            display: 'flex',
+   506→            alignItems: 'center',
+   507→            justifyContent: 'center',
+   508→            width: 38,
+   509→            height: 38,
+   510→            borderRadius: 10,
+   511→            border: '1px solid var(--border-color)',
+   512→            background: 'var(--bg-card)',
+   513→            color: '#b9c2d0',
+   514→            cursor: 'pointer',
+   515→            transition: 'all 0.15s',
+   516→          }}
+   517→          onMouseEnter={(e) => {
+   518→            (e.currentTarget as HTMLElement).style.borderColor = '#00e5ff';
+   519→            (e.currentTarget as HTMLElement).style.color = '#00e5ff';
+   520→          }}
+   521→          onMouseLeave={(e) => {
+   522→            (e.currentTarget as HTMLElement).style.borderColor = 'var(--border-color)';
+   523→            (e.currentTarget as HTMLElement).style.color = '#b9c2d0';
+   524→          }}
+   525→          title="Go back"
+   526→        >
+   527→          <ChevronLeft size={18} />
+   528→        </button>
+   529→
+   530→        {/* Coin Dropdown */}
+   531→        <div style={{ position: 'relative' }}>
+   532→          <button
+   533→            onClick={() => setCoinDropdownOpen(!coinDropdownOpen)}
+   534→            className="glass-card"
+   535→            style={{
+   536→              display: 'flex',
+   537→              alignItems: 'center',
+   538→              gap: 8,
+   539→              padding: '10px 16px',
+   540→              border: '1px solid var(--border-color)',
+   541→              borderRadius: 12,
+   542→              background: 'var(--bg-card)',
+   543→              color: '#ffffff',
+   544→              fontSize: 16,
+   545→              fontWeight: 700,
+   546→              cursor: 'pointer',
+   547→              minWidth: 160,
+   548→            }}
+   549→          >
+   550→            {activeCoin.name}
+   551→            <ChevronDown size={16} style={{ color: '#6b7a8d', marginLeft: 'auto' }} />
+   552→          </button>
+   553→          {coinDropdownOpen && (
+   554→            <div
+   555→              style={{
+   556→                position: 'absolute',
+   557→                top: '100%',
+   558→                left: 0,
+   559→                marginTop: 4,
+   560→                background: '#171c28',
+   561→                border: '1px solid #2a3042',
+   562→                borderRadius: 12,
+   563→                padding: 6,
+   564→                zIndex: 100,
+   565→                minWidth: 200,
+   566→                boxShadow: '0 12px 40px rgba(0,0,0,0.5)',
+   567→              }}
+   568→            >
+   569→              {COINS.map((coin) => (
+   570→                <button
+   571→                  key={coin.symbol}
+   572→                  onClick={() => {
+   573→                    setSelectedCoin(coin.symbol);
+   574→                    setCoinDropdownOpen(false);
+   575→                  }}
+   576→                  style={{
+   577→                    display: 'flex',
+   578→                    alignItems: 'center',
+   579→                    justifyContent: 'space-between',
+   580→                    width: '100%',
+   581→                    padding: '10px 14px',
+   582→                    border: 'none',
+   583→                    borderRadius: 8,
+   584→                    background: selectedCoin === coin.symbol ? 'rgba(0,229,255,0.1)' : 'transparent',
+   585→                    color: selectedCoin === coin.symbol ? '#00e5ff' : '#b9c2d0',
+   586→                    fontSize: 14,
+   587→                    fontWeight: 500,
+   588→                    cursor: 'pointer',
+   589→                    transition: 'background 0.15s',
+   590→                  }}
+   591→                  onMouseEnter={(e) => {
+   592→                    if (selectedCoin !== coin.symbol)
+   593→                      (e.target as HTMLElement).style.background = 'rgba(255,255,255,0.04)';
+   594→                  }}
+   595→                  onMouseLeave={(e) => {
+   596→                    if (selectedCoin !== coin.symbol)
+   597→                      (e.target as HTMLElement).style.background = 'transparent';
+   598→                  }}
+   599→                >
+   600→                  <span style={{ fontWeight: 600 }}>{coin.name}</span>
+   601→                  <span style={{ color: '#6b7a8d', fontSize: 12 }}>
+   602→                    ${formatPrice(coin.basePrice, coin.decimals)}
+   603→                  </span>
+   604→                </button>
+   605→              ))}
+   606→            </div>
+   607→          )}
+   608→        </div>
+   609→
+   610→        {/* Current Price Display */}
+   611→        <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
+   612→          <span style={{ fontSize: 24, fontWeight: 700, color: '#ffffff' }}>
+   613→            ${formatPrice(currentPrice, priceDecimals)}
+   614→          </span>
+   615→          <span
+   616→            style={{
+   617→              fontSize: 14,
+   618→              fontWeight: 600,
+   619→              color: isPositive ? '#00d26a' : '#ff3d57',
+   620→              display: 'flex',
+   621→              alignItems: 'center',
+   622→              gap: 4,
+   623→            }}
+   624→          >
+   625→            {isPositive ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
+   626→            {isPositive ? '+' : ''}
+   627→            {priceChange24h.toFixed(2)}%
+   628→          </span>
+   629→        </div>
+   630→      </div>
+   631→
+   632→      {/* Close dropdown on outside click */}
+   633→      {coinDropdownOpen && (
+   634→        <div
+   635→          style={{ position: 'fixed', inset: 0, zIndex: 50 }}
+   636→          onClick={() => setCoinDropdownOpen(false)}
+   637→        />
+   638→      )}
+   639→
+   640→      {/* Main 2-Column Layout */}
+   641→      <div
+   642→        style={{
+   643→          display: 'grid',
+   644→          gridTemplateColumns: '1fr 380px',
+   645→          gap: 16,
+   646→          minHeight: 'calc(100vh - 160px)',
+   647→        }}
+   648→        className="trading-grid"
+   649→      >
+   650→        {/* LEFT COLUMN */}
+   651→        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
+   652→          {/* Chart Section */}
+   653→          <div
+   654→            className="glass-card"
+   655→            style={{
+   656→              background: 'var(--bg-card)',
+   657→              border: '1px solid var(--border-color)',
+   658→              borderRadius: 16,
+   659→              padding: '16px 20px',
+   660→              flex: '0 0 auto',
+   661→            }}
+   662→          >
+   663→            {/* Timeframe Selector */}
+   664→            <div
+   665→              style={{
+   666→                display: 'flex',
+   667→                gap: 4,
+   668→                marginBottom: 16,
+   669→                flexWrap: 'wrap',
+   670→              }}
+   671→            >
+   672→              {TIMEFRAMES.map((tf) => (
+   673→                <button
+   674→                  key={tf}
+   675→                  onClick={() => setTimeframe(tf)}
+   676→                  style={{
+   677→                    padding: '6px 14px',
+   678→                    borderRadius: 8,
+   679→                    border: 'none',
+   680→                    background: timeframe === tf ? 'rgba(0,229,255,0.12)' : 'transparent',
+   681→                    color: timeframe === tf ? '#00e5ff' : '#6b7a8d',
+   682→                    fontSize: 13,
+   683→                    fontWeight: 600,
+   684→                    cursor: 'pointer',
+   685→                    transition: 'all 0.15s',
+   686→                  }}
+   687→                >
+   688→                  {tf}
+   689→                </button>
+   690→              ))}
+   691→            </div>
+   692→
+   693→            {/* Chart */}
+   694→            <div style={{ width: '100%', height: 340 }}>
+   695→              <ResponsiveContainer width="100%" height="100%">
+   696→                <AreaChart data={chartData} margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
+   697→                  <defs>
+   698→                    <linearGradient id="priceGradient" x1="0" y1="0" x2="0" y2="1">
+   699→                      <stop offset="0%" stopColor="#f5b400" stopOpacity={0.3} />
+   700→                      <stop offset="50%" stopColor="#00e5ff" stopOpacity={0.15} />
+   701→                      <stop offset="100%" stopColor="#00e5ff" stopOpacity={0} />
+   702→                    </linearGradient>
+   703→                  </defs>
+   704→                  <CartesianGrid
+   705→                    strokeDasharray="3 3"
+   706→                    stroke="rgba(42,48,66,0.5)"
+   707→                    vertical={false}
+   708→                  />
+   709→                  <XAxis
+   710→                    dataKey="time"
+   711→                    tick={{ fill: '#6b7a8d', fontSize: 11 }}
+   712→                    axisLine={{ stroke: '#2a3042' }}
+   713→                    tickLine={false}
+   714→                    interval="preserveStartEnd"
+   715→                  />
+   716→                  <YAxis
+   717→                    domain={['auto', 'auto']}
+   718→                    tick={{ fill: '#6b7a8d', fontSize: 11 }}
+   719→                    axisLine={{ stroke: '#2a3042' }}
+   720→                    tickLine={false}
+   721→                    tickFormatter={(v: number) => `$${v.toLocaleString()}`}
+   722→                    width={80}
+   723→                  />
+   724→                  <Tooltip content={<ChartTooltip decimals={priceDecimals} />} />
+   725→                  <Area
+   726→                    type="monotone"
+   727→                    dataKey="price"
+   728→                    stroke="#f5b400"
+   729→                    strokeWidth={2}
+   730→                    fill="url(#priceGradient)"
+   731→                    animationDuration={600}
+   732→                  />
+   733→                </AreaChart>
+   734→              </ResponsiveContainer>
+   735→            </div>
+   736→          </div>
+   737→
+   738→          {/* Order Book / Recent Trades Tabs */}
+   739→          <div
+   740→            className="glass-card"
+   741→            style={{
+   742→              background: 'var(--bg-card)',
+   743→              border: '1px solid var(--border-color)',
+   744→              borderRadius: 16,
+   745→              padding: 16,
+   746→              flex: '1 1 auto',
+   747→              minHeight: 300,
+   748→              display: 'flex',
+   749→              flexDirection: 'column',
+   750→              overflow: 'hidden',
+   751→            }}
+   752→          >
+   753→            {/* Tabs */}
+   754→            <div
+   755→              style={{
+   756→                display: 'flex',
+   757→                gap: 0,
+   758→                marginBottom: 16,
+   759→                borderBottom: '1px solid #2a3042',
+   760→              }}
+   761→            >
+   762→              {(['orderbook', 'trades'] as const).map((tab) => (
+   763→                <button
+   764→                  key={tab}
+   765→                  onClick={() => setActiveTab(tab)}
+   766→                  style={{
+   767→                    padding: '10px 20px',
+   768→                    border: 'none',
+   769→                    borderBottom: activeTab === tab ? '2px solid #00e5ff' : '2px solid transparent',
+   770→                    background: 'transparent',
+   771→                    color: activeTab === tab ? '#00e5ff' : '#6b7a8d',
+   772→                    fontSize: 14,
+   773→                    fontWeight: 600,
+   774→                    cursor: 'pointer',
+   775→                    transition: 'all 0.15s',
+   776→                  }}
+   777→                >
+   778→                  {tab === 'orderbook' ? 'Order Book' : 'Recent Trades'}
+   779→                </button>
+   780→              ))}
+   781→            </div>
+   782→
+   783→            {activeTab === 'orderbook' ? (
+   784→              <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+   785→                {/* Header */}
+   786→                <div
+   787→                  style={{
+   788→                    display: 'grid',
+   789→                    gridTemplateColumns: '1fr 1fr',
+   790→                    padding: '6px 12px',
+   791→                    fontSize: 12,
+   792→                    color: '#6b7a8d',
+   793→                    fontWeight: 600,
+   794→                    marginBottom: 4,
+   795→                  }}
+   796→                >
+   797→                  <span>Price (USDT)</span>
+   798→                  <span style={{ textAlign: 'right' }}>Amount</span>
+   799→                </div>
+   800→
+   801→                {/* Asks (sell orders - red) */}
+   802→                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+   803→                  {orderBook.asks.map((ask, i) => (
+   804→                    <div
+   805→                      key={`ask-${i}`}
+   806→                      style={{
+   807→                        display: 'grid',
+   808→                        gridTemplateColumns: '1fr 1fr',
+   809→                        padding: '4px 12px',
+   810→                        fontSize: 13,
+   811→                        position: 'relative',
+   812→                      }}
+   813→                    >
+   814→                      <div
+   815→                        style={{
+   816→                          position: 'absolute',
+   817→                          right: 0,
+   818→                          top: 0,
+   819→                          bottom: 0,
+   820→                          width: `${Math.min(ask.amount / 4 * 100, 100)}%`,
+   821→                          background: 'rgba(255,61,87,0.08)',
+   822→                        }}
+   823→                      />
+   824→                      <span style={{ color: '#ff3d57', position: 'relative', zIndex: 1 }}>
+   825→                        {formatPrice(ask.price, priceDecimals)}
+   826→                      </span>
+   827→                      <span style={{ color: '#b9c2d0', textAlign: 'right', position: 'relative', zIndex: 1 }}>
+   828→                        {ask.amount.toFixed(4)}
+   829→                      </span>
+   830→                    </div>
+   831→                  ))}
+   832→                </div>
+   833→
+   834→                {/* Spread */}
+   835→                <div
+   836→                  style={{
+   837→                    padding: '8px 12px',
+   838→                    textAlign: 'center',
+   839→                    fontSize: 14,
+   840→                    fontWeight: 700,
+   841→                    color: isPositive ? '#00d26a' : '#ff3d57',
+   842→                    display: 'flex',
+   843→                    alignItems: 'center',
+   844→                    justifyContent: 'center',
+   845→                    gap: 8,
+   846→                    borderTop: '1px solid #2a3042',
+   847→                    borderBottom: '1px solid #2a3042',
+   848→                    margin: '4px 0',
+   849→                  }}
+   850→                >
+   851→                  {isPositive ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
+   852→                  ${formatPrice(currentPrice, priceDecimals)}
+   853→                </div>
+   854→
+   855→                {/* Bids (buy orders - green) */}
+   856→                <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+   857→                  {orderBook.bids.map((bid, i) => (
+   858→                    <div
+   859→                      key={`bid-${i}`}
+   860→                      style={{
+   861→                        display: 'grid',
+   862→                        gridTemplateColumns: '1fr 1fr',
+   863→                        padding: '4px 12px',
+   864→                        fontSize: 13,
+   865→                        position: 'relative',
+   866→                      }}
+   867→                    >
+   868→                      <div
+   869→                        style={{
+   870→                          position: 'absolute',
+   871→                          right: 0,
+   872→                          top: 0,
+   873→                          bottom: 0,
+   874→                          width: `${Math.min(bid.amount / 4 * 100, 100)}%`,
+   875→                          background: 'rgba(0,210,106,0.08)',
+   876→                        }}
+   877→                      />
+   878→                      <span style={{ color: '#00d26a', position: 'relative', zIndex: 1 }}>
+   879→                        {formatPrice(bid.price, priceDecimals)}
+   880→                      </span>
+   881→                      <span style={{ color: '#b9c2d0', textAlign: 'right', position: 'relative', zIndex: 1 }}>
+   882→                        {bid.amount.toFixed(4)}
+   883→                      </span>
+   884→                    </div>
+   885→                  ))}
+   886→                </div>
+   887→              </div>
+   888→            ) : (
+   889→              <div style={{ flex: 1, overflow: 'hidden' }}>
+   890→                {/* Recent Trades Header */}
+   891→                <div
+   892→                  style={{
+   893→                    display: 'grid',
+   894→                    gridTemplateColumns: '1fr 1fr 1fr 60px',
+   895→                    padding: '6px 12px',
+   896→                    fontSize: 12,
+   897→                    color: '#6b7a8d',
+   898→                    fontWeight: 600,
+   899→                    marginBottom: 4,
+   900→                  }}
+   901→                >
+   902→                  <span>Time</span>
+   903→                  <span>Price</span>
+   904→                  <span style={{ textAlign: 'right' }}>Amount</span>
+   905→                  <span style={{ textAlign: 'right' }}>Side</span>
+   906→                </div>
+   907→
+   908→                <div className="data-table" style={{ maxHeight: 300, overflowY: 'auto' }}>
+   909→                  {recentTrades.map((trade, i) => (
+   910→                    <div
+   911→                      key={`trade-${i}`}
+   912→                      style={{
+   913→                        display: 'grid',
+   914→                        gridTemplateColumns: '1fr 1fr 1fr 60px',
+   915→                        padding: '5px 12px',
+   916→                        fontSize: 13,
+   917→                        borderBottom: '1px solid rgba(42,48,66,0.3)',
+   918→                      }}
+   919→                    >
+   920→                      <span style={{ color: '#6b7a8d' }}>{trade.time}</span>
+   921→                      <span style={{ color: trade.isBuy ? '#00d26a' : '#ff3d57' }}>
+   922→                        {formatPrice(trade.price, priceDecimals)}
+   923→                      </span>
+   924→                      <span style={{ color: '#b9c2d0', textAlign: 'right' }}>
+   925→                        {trade.amount.toFixed(4)}
+   926→                      </span>
+   927→                      <span style={{ textAlign: 'right' }}>
+   928→                        <span
+   929→                          className={trade.isBuy ? 'badge-green' : 'badge-red'}
+   930→                          style={{
+   931→                            padding: '2px 8px',
+   932→                            borderRadius: 4,
+   933→                            fontSize: 11,
+   934→                            fontWeight: 600,
+   935→                          }}
+   936→                        >
+   937→                          {trade.isBuy ? 'BUY' : 'SELL'}
+   938→                        </span>
+   939→                      </span>
+   940→                    </div>
+   941→                  ))}
+   942→                </div>
+   943→              </div>
+   944→            )}
+   945→          </div>
+   946→        </div>
+   947→
+   948→        {/* RIGHT COLUMN - Trading Panel + Market Sidebar */}
+   949→        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+   950→          {/* Trading Panel */}
+   951→          <div className="trade-box" style={{ display: 'flex', flexDirection: 'column', gap: 0, height: 'fit-content' }}>
+   952→            {/* Wallet Balance */}
+   953→            <div style={{ padding: '16px 20px 0' }}>
+   954→              <div
+   955→                style={{
+   956→                  display: 'flex',
+   957→                  alignItems: 'center',
+   958→                  justifyContent: 'space-between',
+   959→                  marginBottom: 16,
+   960→                }}
+   961→              >
+   962→                <div>
+   963→                  <div style={{ fontSize: 12, color: '#6b7a8d', marginBottom: 4 }}>Available Balance</div>
+   964→                  <div style={{ fontSize: 20, fontWeight: 700, color: '#ffffff' }}>
+   965→                    {walletLoading ? (
+   966→                      <Loader2 size={18} style={{ display: 'inline', color: '#6b7a8d' }} className="spin" />
+   967→                    ) : (
+   968→                      <>${formatUSD(walletBalance)}</>
+   969→                    )}
+   970→                  </div>
+   971→                </div>
+   972→                <button
+   973→                  onClick={fetchWallet}
+   974→                  style={{
+   975→                    background: 'rgba(0,229,255,0.08)',
+   976→                    border: '1px solid rgba(0,229,255,0.2)',
+   977→                    borderRadius: 8,
+   978→                    padding: '6px 10px',
+   979→                    color: '#00e5ff',
+   980→                    cursor: 'pointer',
+   981→                    display: 'flex',
+   982→                    alignItems: 'center',
+   983→                  }}
+   984→                  title="Refresh balance"
+   985→                >
+   986→                  <RefreshCw size={14} />
+   987→                </button>
+   988→              </div>
+   989→
+   990→              {/* Price + 24h Change */}
+   991→              <div
+   992→                style={{
+   993→                  display: 'flex',
+   994→                  alignItems: 'baseline',
+   995→                  gap: 10,
+   996→                  marginBottom: 16,
+   997→                }}
+   998→              >
+   999→                <span style={{ fontSize: 22, fontWeight: 800, color: '#ffffff' }}>
+  1000→                  ${formatPrice(currentPrice, priceDecimals)}
+  1001→                </span>
+  1002→                <span
+  1003→                  style={{
+  1004→                    fontSize: 13,
+  1005→                    fontWeight: 600,
+  1006→                    padding: '3px 8px',
+  1007→                    borderRadius: 6,
+  1008→                    background: isPositive ? 'rgba(0,210,106,0.12)' : 'rgba(255,61,87,0.12)',
+  1009→                    color: isPositive ? '#00d26a' : '#ff3d57',
+  1010→                  }}
+  1011→                >
+  1012→                  {isPositive ? '+' : ''}{priceChange24h.toFixed(2)}%
+  1013→                </span>
+  1014→              </div>
+  1015→
+  1016→              {/* Order Type Tabs */}
+  1017→              <div
+  1018→                style={{
+  1019→                  display: 'flex',
+  1020→                  gap: 0,
+  1021→                  marginBottom: 16,
+  1022→                  background: 'rgba(255,255,255,0.03)',
+  1023→                  borderRadius: 10,
+  1024→                  padding: 3,
+  1025→                }}
+  1026→              >
+  1027→                {ORDER_TYPES.map((type) => (
+  1028→                  <button
+  1029→                    key={type}
+  1030→                    onClick={() => setOrderType(type)}
+  1031→                    style={{
+  1032→                      flex: 1,
+  1033→                      padding: '8px 0',
+  1034→                      border: 'none',
+  1035→                      borderRadius: 8,
+  1036→                      background: orderType === type ? 'rgba(0,229,255,0.12)' : 'transparent',
+  1037→                      color: orderType === type ? '#00e5ff' : '#6b7a8d',
+  1038→                      fontSize: 13,
+  1039→                      fontWeight: 600,
+  1040→                      cursor: 'pointer',
+  1041→                      transition: 'all 0.15s',
+  1042→                    }}
+  1043→                  >
+  1044→                    {type}
+  1045→                  </button>
+  1046→                ))}
+  1047→              </div>
+  1048→
+  1049→              {/* Amount Input */}
+  1050→              <div style={{ marginBottom: 12 }}>
+  1051→                <label style={{ fontSize: 12, color: '#6b7a8d', display: 'block', marginBottom: 6 }}>
+  1052→                  Amount ({activeCoin.symbol.replace('USDT', '')})
+  1053→                </label>
+  1054→                <div className="trade-input" style={{ position: 'relative' }}>
+  1055→                  <input
+  1056→                    type="number"
+  1057→                    value={amount}
+  1058→                    onChange={(e) => setAmount(e.target.value)}
+  1059→                    placeholder="0.00"
+  1060→                    step="any"
+  1061→                    className="trade-input"
+  1062→                    style={{
+  1063→                      width: '100%',
+  1064→                      background: '#1b2232',
+  1065→                      border: '1px solid #2d364b',
+  1066→                      borderRadius: 12,
+  1067→                      padding: '12px 80px 12px 16px',
+  1068→                      color: '#ffffff',
+  1069→                      fontSize: 15,
+  1070→                      fontWeight: 600,
+  1071→                      outline: 'none',
+  1072→                      transition: 'border-color 0.2s, box-shadow 0.2s',
+  1073→                    }}
+  1074→                    onFocus={(e) => {
+  1075→                      e.target.style.borderColor = '#00e5ff';
+  1076→                      e.target.style.boxShadow = '0 0 0 3px rgba(0,229,255,0.1)';
+  1077→                    }}
+  1078→                    onBlur={(e) => {
+  1079→                      e.target.style.borderColor = '#2d364b';
+  1080→                      e.target.style.boxShadow = 'none';
+  1081→                    }}
+  1082→                  />
+  1083→                  <div
+  1084→                    style={{
+  1085→                      position: 'absolute',
+  1086→                      right: 12,
+  1087→                      top: '50%',
+  1088→                      transform: 'translateY(-50%)',
+  1089→                      fontSize: 12,
+  1090→                      color: '#6b7a8d',
+  1091→                      textAlign: 'right',
+  1092→                    }}
+  1093→                  >
+  1094→                    <div style={{ fontWeight: 600 }}>≈ ${notionalValue > 0 ? formatUSD(notionalValue) : '0.00'}</div>
+  1095→                  </div>
+  1096→                </div>
+  1097→              </div>
+  1098→
+  1099→              {/* Quick Amount Buttons */}
+  1100→              <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
+  1101→                {quickAmounts.map((pct) => (
+  1102→                  <button
+  1103→                    key={pct}
+  1104→                    onClick={() => handleQuickAmount(pct)}
+  1105→                    style={{
+  1106→                      flex: 1,
+  1107→                      padding: '6px 0',
+  1108→                      border: '1px solid #2d364b',
+  1109→                      borderRadius: 8,
+  1110→                      background: 'transparent',
+  1111→                      color: '#b9c2d0',
+  1112→                      fontSize: 12,
+  1113→                      fontWeight: 600,
+  1114→                      cursor: 'pointer',
+  1115→                      transition: 'all 0.15s',
+  1116→                    }}
+  1117→                    onMouseEnter={(e) => {
+  1118→                      (e.currentTarget as HTMLElement).style.borderColor = '#00e5ff';
+  1119→                      (e.currentTarget as HTMLElement).style.color = '#00e5ff';
+  1120→                    }}
+  1121→                    onMouseLeave={(e) => {
+  1122→                      (e.currentTarget as HTMLElement).style.borderColor = '#2d364b';
+  1123→                      (e.currentTarget as HTMLElement).style.color = '#b9c2d0';
+  1124→                    }}
+  1125→                  >
+  1126→                    {pct}%
+  1127→                  </button>
+  1128→                ))}
+  1129→              </div>
+  1130→
+  1131→              {/* Limit Price Input (shown for Limit orders) */}
+  1132→              {orderType === 'Limit' && (
+  1133→                <div style={{ marginBottom: 12 }}>
+  1134→                  <label style={{ fontSize: 12, color: '#6b7a8d', display: 'block', marginBottom: 6 }}>
+  1135→                    Limit Price (USDT)
+  1136→                  </label>
+  1137→                  <input
+  1138→                    type="number"
+  1139→                    value={limitPrice}
+  1140→                    onChange={(e) => setLimitPrice(e.target.value)}
+  1141→                    placeholder={formatPrice(currentPrice, priceDecimals)}
+  1142→                    step="any"
+  1143→                    className="trade-input"
+  1144→                    style={{
+  1145→                      width: '100%',
+  1146→                      background: '#1b2232',
+  1147→                      border: '1px solid #2d364b',
+  1148→                      borderRadius: 12,
+  1149→                      padding: '12px 16px',
+  1150→                      color: '#ffffff',
+  1151→                      fontSize: 15,
+  1152→                      fontWeight: 600,
+  1153→                      outline: 'none',
+  1154→                      transition: 'border-color 0.2s, box-shadow 0.2s',
+  1155→                    }}
+  1156→                    onFocus={(e) => {
+  1157→                      e.target.style.borderColor = '#00e5ff';
+  1158→                      e.target.style.boxShadow = '0 0 0 3px rgba(0,229,255,0.1)';
+  1159→                    }}
+  1160→                    onBlur={(e) => {
+  1161→                      e.target.style.borderColor = '#2d364b';
+  1162→                      e.target.style.boxShadow = 'none';
+  1163→                    }}
+  1164→                  />
+  1165→                </div>
+  1166→              )}
+  1167→
+  1168→              {/* Stop Price Input (shown for Stop orders) */}
+  1169→              {orderType === 'Stop' && (
+  1170→                <div style={{ marginBottom: 12 }}>
+  1171→                  <label style={{ fontSize: 12, color: '#6b7a8d', display: 'block', marginBottom: 6 }}>
+  1172→                    Stop Price (USDT)
+  1173→                  </label>
+  1174→                  <input
+  1175→                    type="number"
+  1176→                    value={stopPrice}
+  1177→                    onChange={(e) => setStopPrice(e.target.value)}
+  1178→                    placeholder={formatPrice(currentPrice, priceDecimals)}
+  1179→                    step="any"
+  1180→                    className="trade-input"
+  1181→                    style={{
+  1182→                      width: '100%',
+  1183→                      background: '#1b2232',
+  1184→                      border: '1px solid #2d364b',
+  1185→                      borderRadius: 12,
+  1186→                      padding: '12px 16px',
+  1187→                      color: '#ffffff',
+  1188→                      fontSize: 15,
+  1189→                      fontWeight: 600,
+  1190→                      outline: 'none',
+  1191→                      transition: 'border-color 0.2s, box-shadow 0.2s',
+  1192→                    }}
+  1193→                    onFocus={(e) => {
+  1194→                      e.target.style.borderColor = '#00e5ff';
+  1195→                      e.target.style.boxShadow = '0 0 0 3px rgba(0,229,255,0.1)';
+  1196→                    }}
+  1197→                    onBlur={(e) => {
+  1198→                      e.target.style.borderColor = '#2d364b';
+  1199→                      e.target.style.boxShadow = 'none';
+  1200→                    }}
+  1201→                  />
+  1202→                </div>
+  1203→              )}
+  1204→
+  1205→              {/* Leverage Slider */}
+  1206→              <div style={{ marginBottom: 16 }}>
+  1207→                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+  1208→                  <label style={{ fontSize: 12, color: '#6b7a8d' }}>Leverage</label>
+  1209→                  <span
+  1210→                    style={{
+  1211→                      fontSize: 14,
+  1212→                      fontWeight: 700,
+  1213→                      color: leverage > 20 ? '#ff3d57' : leverage > 10 ? '#f5b400' : '#00e5ff',
+  1214→                    }}
+  1215→                  >
+  1216→                    {leverage}x
+  1217→                  </span>
+  1218→                </div>
+  1219→                <input
+  1220→                  type="range"
+  1221→                  min={1}
+  1222→                  max={100}
+  1223→                  value={leverage}
+  1224→                  onChange={(e) => setLeverage(parseInt(e.target.value))}
+  1225→                  style={{
+  1226→                    width: '100%',
+  1227→                    height: 6,
+  1228→                    borderRadius: 3,
+  1229→                    appearance: 'none',
+  1230→                    background: `linear-gradient(to right, #00e5ff 0%, #f5b400 ${leverage}%, #2d364b ${leverage}%, #2d364b 100%)`,
+  1231→                    outline: 'none',
+  1232→                    cursor: 'pointer',
+  1233→                  }}
+  1234→                />
+  1235→                <div
+  1236→                  style={{
+  1237→                    display: 'flex',
+  1238→                    justifyContent: 'space-between',
+  1239→                    marginTop: 4,
+  1240→                    fontSize: 11,
+  1241→                    color: '#6b7a8d',
+  1242→                  }}
+  1243→                >
+  1244→                  <span>1x</span>
+  1245→                  <span>25x</span>
+  1246→                  <span>50x</span>
+  1247→                  <span>75x</span>
+  1248→                  <span>100x</span>
+  1249→                </div>
+  1250→              </div>
+  1251→
+  1252→              {/* Duration Selection */}
+  1253→              <div style={{ marginBottom: 16 }}>
+  1254→                <label style={{ fontSize: 12, color: '#6b7a8d', display: 'block', marginBottom: 8 }}>
+  1255→                  Duration
+  1256→                </label>
+  1257→                <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+  1258→                  {DURATIONS.map((d) => (
+  1259→                    <button
+  1260→                      key={d}
+  1261→                      onClick={() => setDuration(d)}
+  1262→                      style={{
+  1263→                        padding: '6px 12px',
+  1264→                        borderRadius: 8,
+  1265→                        border: '1px solid',
+  1266→                        borderColor: duration === d ? '#00e5ff' : '#2d364b',
+  1267→                        background: duration === d ? 'rgba(0,229,255,0.08)' : 'transparent',
+  1268→                        color: duration === d ? '#00e5ff' : '#6b7a8d',
+  1269→                        fontSize: 12,
+  1270→                        fontWeight: 600,
+  1271→                        cursor: 'pointer',
+  1272→                        transition: 'all 0.15s',
+  1273→                      }}
+  1274→                    >
+  1275→                      {d}
+  1276→                    </button>
+  1277→                  ))}
+  1278→                </div>
+  1279→              </div>
+  1280→
+  1281→              {/* Estimated P&L */}
+  1282→              {amountNum > 0 && (
+  1283→                <div
+  1284→                  style={{
+  1285→                    padding: '12px 16px',
+  1286→                    borderRadius: 12,
+  1287→                    background: 'rgba(0,229,255,0.04)',
+  1288→                    border: '1px solid rgba(0,229,255,0.1)',
+  1289→                    marginBottom: 16,
+  1290→                  }}
+  1291→                >
+  1292→                  <div style={{ fontSize: 12, color: '#6b7a8d', marginBottom: 4 }}>Estimated P&L</div>
+  1293→                  <div style={{ fontSize: 16, fontWeight: 700, color: '#00e5ff' }}>
+  1294→                    +${formatUSD(estimatedPnl)}
+  1295→                  </div>
+  1296→                  <div style={{ fontSize: 11, color: '#6b7a8d', marginTop: 2 }}>
+  1297→                    Margin: ${formatUSD(actualMargin)} · Notional: ${formatUSD(notionalValue)}
+  1298→                  </div>
+  1299→                </div>
+  1300→              )}
+  1301→
+  1302→              {/* BUY UP Button */}
+  1303→              <button
+  1304→                className="buy-up"
+  1305→                onClick={() => handleSubmitTrade('BUY')}
+  1306→                disabled={submitting}
+  1307→                style={{
+  1308→                  width: '100%',
+  1309→                  padding: '16px 0',
+  1310→                  borderRadius: 14,
+  1311→                  border: 'none',
+  1312→                  background: submitting && submitSide === 'BUY'
+  1313→                    ? 'rgba(0,210,106,0.5)'
+  1314→                    : 'linear-gradient(135deg, #00d26a 0%, #00a854 100%)',
+  1315→                  color: '#ffffff',
+  1316→                  fontSize: 16,
+  1317→                  fontWeight: 700,
+  1318→                  cursor: submitting ? 'not-allowed' : 'pointer',
+  1319→                  marginBottom: 10,
+  1320→                  display: 'flex',
+  1321→                  alignItems: 'center',
+  1322→                  justifyContent: 'center',
+  1323→                  gap: 8,
+  1324→                  transition: 'opacity 0.2s',
+  1325→                  opacity: submitting && submitSide !== 'BUY' ? 0.5 : 1,
+  1326→                  letterSpacing: 0.5,
+  1327→                }}
+  1328→              >
+  1329→                {submitting && submitSide === 'BUY' ? (
+  1330→                  <Loader2 size={20} className="spin" />
+  1331→                ) : (
+  1332→                  <ArrowUpRight size={20} />
+  1333→                )}
+  1334→                {submitting && submitSide === 'BUY' ? 'Placing Order...' : 'BUY UP / CALL'}
+  1335→              </button>
+  1336→
+  1337→              {/* SELL DOWN Button */}
+  1338→              <button
+  1339→                className="buy-down"
+  1340→                onClick={() => handleSubmitTrade('SELL')}
+  1341→                disabled={submitting}
+  1342→                style={{
+  1343→                  width: '100%',
+  1344→                  padding: '16px 0',
+  1345→                  borderRadius: 14,
+  1346→                  border: 'none',
+  1347→                  background: submitting && submitSide === 'SELL'
+  1348→                    ? 'rgba(255,61,87,0.5)'
+  1349→                    : 'linear-gradient(135deg, #ff3d57 0%, #d42e44 100%)',
+  1350→                  color: '#ffffff',
+  1351→                  fontSize: 16,
+  1352→                  fontWeight: 700,
+  1353→                  cursor: submitting ? 'not-allowed' : 'pointer',
+  1354→                  display: 'flex',
+  1355→                  alignItems: 'center',
+  1356→                  justifyContent: 'center',
+  1357→                  gap: 8,
+  1358→                  transition: 'opacity 0.2s',
+  1359→                  opacity: submitting && submitSide !== 'SELL' ? 0.5 : 1,
+  1360→                  letterSpacing: 0.5,
+  1361→                }}
+  1362→              >
+  1363→                {submitting && submitSide === 'SELL' ? (
+  1364→                  <Loader2 size={20} className="spin" />
+  1365→                ) : (
+  1366→                  <ArrowDownRight size={20} />
+  1367→                )}
+  1368→                {submitting && submitSide === 'SELL' ? 'Placing Order...' : 'SELL DOWN / PUT'}
+  1369→              </button>
+  1370→            </div>
+  1371→          </div>
+  1372→
+  1373→          {/* Market Coins Sidebar */}
+  1374→          <div
+  1375→            className="glass-card"
+  1376→            style={{
+  1377→              background: 'var(--bg-card)',
+  1378→              border: '1px solid var(--border-color)',
+  1379→              borderRadius: 16,
+  1380→              padding: '14px 16px',
+  1381→              flex: '1 1 auto',
+  1382→              overflow: 'hidden',
+  1383→              display: 'flex',
+  1384→              flexDirection: 'column',
+  1385→            }}
+  1386→          >
+  1387→            <div
+  1388→              style={{
+  1389→                fontSize: 13,
+  1390→                fontWeight: 700,
+  1391→                color: '#b9c2d0',
+  1392→                marginBottom: 10,
+  1393→                textTransform: 'uppercase',
+  1394→                letterSpacing: 0.5,
+  1395→              }}
+  1396→            >
+  1397→              Markets
+  1398→            </div>
+  1399→
+  1400→            {/* Table Header */}
+  1401→            <div
+  1402→              style={{
+  1403→                display: 'grid',
+  1404→                gridTemplateColumns: '1fr auto auto',
+  1405→                padding: '0 10px 8px',
+  1406→                fontSize: 11,
+  1407→                color: '#6b7a8d',
+  1408→                fontWeight: 600,
+  1409→                borderBottom: '1px solid rgba(42,48,66,0.4)',
+  1410→                marginBottom: 6,
+  1411→              }}
+  1412→            >
+  1413→              <span>Symbol</span>
+  1414→              <span style={{ textAlign: 'right' }}>Price</span>
+  1415→              <span style={{ textAlign: 'right', minWidth: 56 }}>24h</span>
+  1416→            </div>
+  1417→
+  1418→            {/* Coin Rows */}
+  1419→            <div style={{ flex: 1, overflowY: 'auto' }}>
+  1420→              {COINS.map((coin) => {
+  1421→                const isActive = activeCoin.symbol === coin.symbol;
+  1422→                const change = parseFloat(((Math.random() - 0.4) * 5).toFixed(2));
+  1423→                const positive = change >= 0;
+  1424→                return (
+  1425→                  <button
+  1426→                    key={coin.symbol}
+  1427→                    onClick={() => handleCoinRowClick(coin.symbol)}
+  1428→                    style={{
+  1429→                      display: 'grid',
+  1430→                      gridTemplateColumns: '1fr auto auto',
+  1431→                      alignItems: 'center',
+  1432→                      width: '100%',
+  1433→                      padding: '9px 10px',
+  1434→                      border: 'none',
+  1435→                      borderRadius: 8,
+  1436→                      background: isActive ? 'rgba(0,229,255,0.06)' : 'transparent',
+  1437→                      color: isActive ? '#ffffff' : '#b9c2d0',
+  1438→                      fontSize: 13,
+  1439→                      fontWeight: isActive ? 600 : 400,
+  1440→                      cursor: 'pointer',
+  1441→                      transition: 'background 0.15s',
+  1442→                      marginBottom: 2,
+  1443→                      textAlign: 'left',
+  1444→                    }}
+  1445→                    onMouseEnter={(e) => {
+  1446→                      if (!isActive)
+  1447→                        (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.03)';
+  1448→                    }}
+  1449→                    onMouseLeave={(e) => {
+  1450→                      if (!isActive)
+  1451→                        (e.currentTarget as HTMLElement).style.background = 'transparent';
+  1452→                    }}
+  1453→                  >
+  1454→                    <span style={{ fontWeight: isActive ? 700 : 500 }}>
+  1455→                      {coin.name}
+  1456→                    </span>
+  1457→                    <span
+  1458→                      style={{
+  1459→                        textAlign: 'right',
+  1460→                        color: '#e2e8f0',
+  1461→                        fontSize: 12,
+  1462→                        fontWeight: 500,
+  1463→                      }}
+  1464→                    >
+  1465→                      ${formatPrice(coin.basePrice, coin.decimals)}
+  1466→                    </span>
+  1467→                    <span
+  1468→                      style={{
+  1469→                        textAlign: 'right',
+  1470→                        minWidth: 56,
+  1471→                        fontSize: 12,
+  1472→                        fontWeight: 600,
+  1473→                        color: positive ? '#00d26a' : '#ff3d57',
+  1474→                      }}
+  1475→                    >
+  1476→                      {positive ? '+' : ''}{change.toFixed(2)}%
+  1477→                    </span>
+  1478→                  </button>
+  1479→                );
+  1480→              })}
+  1481→            </div>
+  1482→          </div>
+  1483→        </div>
+  1484→      </div>
+  1485→
+  1486→      {/* Responsive Styles */}
+  1487→      <style jsx global>{`
+  1488→        .trading-grid {
+  1489→          display: grid;
+  1490→          grid-template-columns: 1fr 380px;
+  1491→        }
+  1492→
+  1493→        @keyframes slideIn {
+  1494→          from { opacity: 0; transform: translateX(40px); }
+  1495→          to { opacity: 1; transform: translateX(0); }
+  1496→        }
+  1497→
+  1498→        @keyframes spin {
+  1499→          from { transform: rotate(0deg); }
+  1500→          to { transform: rotate(360deg); }
+  1501→        }
+  1502→
+  1503→        .spin {
+  1504→          animation: spin 1s linear infinite;
+  1505→        }
+  1506→
+  1507→        @media (max-width: 900px) {
+  1508→          .trading-grid {
+  1509→            grid-template-columns: 1fr !important;
+  1510→          }
+  1511→        }
+  1512→
+  1513→        .trade-input::-webkit-inner-spin-button,
+  1514→        .trade-input::-webkit-outer-spin-button {
+  1515→          -webkit-appearance: none;
+  1516→          margin: 0;
+  1517→        }
+  1518→        .trade-input[type='number'] {
+  1519→          -moz-appearance: textfield;
+  1520→        }
+  1521→
+  1522→        .trade-input:focus {
+  1523→          border-color: #00e5ff !important;
+  1524→          box-shadow: 0 0 0 3px rgba(0,229,255,0.1) !important;
+  1525→          outline: none;
+  1526→        }
+  1527→
+  1528→        input[type='range']::-webkit-slider-thumb {
+  1529→          -webkit-appearance: none;
+  1530→          appearance: none;
+  1531→          width: 18px;
+  1532→          height: 18px;
+  1533→          border-radius: 50%;
+  1534→          background: #ffffff;
+  1535→          cursor: pointer;
+  1536→          box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  1537→          border: 2px solid #00e5ff;
+  1538→        }
+  1539→
+  1540→        input[type='range']::-moz-range-thumb {
+  1541→          width: 18px;
+  1542→          height: 18px;
+  1543→          border-radius: 50%;
+  1544→          background: #ffffff;
+  1545→          cursor: pointer;
+  1546→          box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  1547→          border: 2px solid #00e5ff;
+  1548→        }
+  1549→
+  1550→        .data-table::-webkit-scrollbar {
+  1551→          width: 4px;
+  1552→        }
+  1553→        .data-table::-webkit-scrollbar-track {
+  1554→          background: transparent;
+  1555→        }
+  1556→        .data-table::-webkit-scrollbar-thumb {
+  1557→          background: #2a3042;
+  1558→          border-radius: 4px;
+  1559→        }
+  1560→
+  1561→        .badge-green {
+  1562→          background: rgba(0,210,106,0.12);
+  1563→          color: #00d26a;
+  1564→        }
+  1565→        .badge-red {
+  1566→          background: rgba(255,61,87,0.12);
+  1567→          color: #ff3d57;
+  1568→        }
+  1569→
+  1570→        .glass-card {
+  1571→          background: var(--bg-card);
+  1572→          border: 1px solid var(--border-color);
+  1573→        }
+  1574→
+  1575→        .trade-box {
+  1576→          background: var(--bg-secondary, #10141d);
+  1577→          border: 1px solid rgba(255,255,255,0.08);
+  1578→          border-radius: 20px;
+  1579→        }
+  1580→      `}</style>
+  1581→    </div>
+  1582→  );
+  1583→}
