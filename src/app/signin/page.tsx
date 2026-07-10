@@ -307,6 +307,38 @@ function SignInContent() {
     return Object.keys(errs).length === 0;
   }
 
+  function PasswordStrengthIndicator({ password }: { password: string }) {
+    const strength = getPasswordStrength(password);
+    if (!strength) return null;
+    return (
+      <div className="flex flex-col gap-1">
+        <div className="h-1 w-full rounded-full bg-[rgba(192,199,209,0.12)]">
+          <div
+            className="h-1 rounded-full transition-all duration-300"
+            style={{ width: strength.width, background: strength.color }}
+          />
+        </div>
+        <span className="text-[11px]" style={{ color: strength.color }}>
+          {strength.label}
+        </span>
+      </div>
+    );
+  }
+
+  function getPasswordStrength(pw: string): { label: string; color: string; width: string } | null {
+    if (!pw) return null;
+    let score = 0;
+    if (pw.length >= 8) score++;
+    if (pw.length >= 12) score++;
+    if (/[A-Z]/.test(pw)) score++;
+    if (/[a-z]/.test(pw)) score++;
+    if (/[0-9]/.test(pw)) score++;
+    if (/[^A-Za-z0-9]/.test(pw)) score++;
+    if (score <= 2) return { label: 'Weak', color: '#FF4757', width: '33%' };
+    if (score <= 4) return { label: 'Medium', color: '#FFD700', width: '66%' };
+    return { label: 'Strong', color: '#00E676', width: '100%' };
+  }
+
   function validateRegister(): boolean {
     const errs: Record<string, string> = {};
     if (!regFirstName.trim()) errs.firstName = 'First name is required';
@@ -314,10 +346,15 @@ function SignInContent() {
     if (!regEmail.trim()) errs.email = 'Email is required';
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(regEmail.trim())) errs.email = 'Invalid email address';
     if (!regPhone.trim()) errs.phone = 'Phone number is required';
-    else if (!/^\d{5,15}$/.test(regPhone.replace(/\s/g, ''))) errs.phone = 'Enter a valid phone number';
+    else if (!/^\d{7,15}$/.test(regPhone.replace(/\D/g, ''))) errs.phone = 'Phone number must be 7-15 digits';
     if (!regPassword) errs.password = 'Password is required';
-    else if (regPassword.length < 6) errs.password = 'Password must be at least 6 characters';
-    if (regPassword !== regConfirm) errs.confirm = 'Passwords do not match';
+    else if (regPassword.length < 8) errs.password = 'Password must be at least 8 characters';
+    else if (!/[A-Z]/.test(regPassword)) errs.password = 'Must contain at least 1 uppercase letter';
+    else if (!/[a-z]/.test(regPassword)) errs.password = 'Must contain at least 1 lowercase letter';
+    else if (!/[0-9]/.test(regPassword)) errs.password = 'Must contain at least 1 digit';
+    else if (regPassword === regEmail.trim()) errs.password = 'Password must not be the same as your email';
+    if (!regConfirm) errs.confirm = 'Please confirm your password';
+    else if (regPassword !== regConfirm) errs.confirm = 'Passwords do not match';
     setFieldErrors(errs);
     return Object.keys(errs).length === 0;
   }
@@ -662,7 +699,7 @@ function SignInContent() {
                       icon={Lock}
                       label="Password"
                       type={showRegPassword ? 'text' : 'password'}
-                      placeholder="Min. 6 characters"
+                      placeholder="Min. 8 chars, uppercase, lowercase, digit"
                       value={regPassword}
                       onChange={setRegPassword}
                       error={fieldErrors.password}
@@ -680,6 +717,8 @@ function SignInContent() {
                         </button>
                       }
                     />
+                    {/* Password strength indicator */}
+                    <PasswordStrengthIndicator password={regPassword} />
 
                     <FormInput
                       icon={Lock}

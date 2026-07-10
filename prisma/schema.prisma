@@ -188,6 +188,15 @@ model Notification {
   @@index([createdAt(sort: Desc)])
 }
 
+// ======================== SYSTEM SETTING ========================
+model SystemSetting {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  value     Json
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+}
+
 // ======================== LOGIN LOG ========================
 model LoginLog {
   id        String   @id @default(uuid())

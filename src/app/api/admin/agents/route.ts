@@ -1,17 +1,13 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
-import { verifyToken, extractBearerToken } from '@/lib/auth';
+import { authenticate } from '@/lib/rbac';
 
 // GET /api/admin/agents — list all agents with their configs and stats
 export async function GET(request: NextRequest) {
   try {
-    const token = extractBearerToken(request.headers.get('authorization'));
-    if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    const payload = verifyToken(token);
-    if (!payload || !payload.role || (payload.role !== 'SUPER_ADMIN' && payload.role !== 'SUB_AGENT')) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
+    const { response } = authenticate(request, ['SUPER_ADMIN', 'SUB_AGENT']);
+    if (response) return response;
 
     const agents = await prisma.user.findMany({
       where: { role: 'SUB_AGENT' },
@@ -69,12 +65,8 @@ export async function GET(request: NextRequest) {
 // PUT /api/admin/agents — update an agent's config
 export async function PUT(request: NextRequest) {
   try {
-    const token = extractBearerToken(request.headers.get('authorization'));
-    if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    const payload = verifyToken(token);
-    if (!payload || payload.role !== 'SUPER_ADMIN') {
-      return NextResponse.json({ error: 'Forbidden: SUPER_ADMIN only' }, { status: 403 });
-    }
+    const { response } = authenticate(request, ['SUPER_ADMIN']);
+    if (response) return response;
 
     const body = await request.json();
     const { agentId, commissionRate, referralRate, maxUsers, maxLeverage, allowedSymbols, riskLimit, status, role } = body;

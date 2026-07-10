@@ -1,49 +1,29 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyToken, extractBearerToken } from '@/lib/auth';
+import { authenticate } from '@/lib/rbac';
+import { getSetting, updateSetting, SETTINGS_KEYS } from '@/lib/settings';
 
-const DEFAULT_RISK_SETTINGS = {
-  maxLeverage: 125,
-  defaultLeverage: 10,
-  initialMarginRate: 0.01,
-  maintenanceMarginRate: 0.005,
-  maxPositionSizeUsd: 1000000,
-  maxOpenPositionsPerUser: 50,
-  maxOpenPositionsPerSymbol: 10,
-  liquidationThreshold: 0.5,
-  autoLiquidation: true,
-  liquidationFeeRate: 0.015,
-  enableStopLoss: true,
-  enableTakeProfit: true,
-  requireStopLoss: false,
-  maxDailyLossPerUser: 50000,
-  maxDailyLossPlatform: 5000000,
-  priceDeviationAlertThreshold: 0.1,
-  restrictedSymbols: [] as string[],
-  maintenanceMode: false,
-  newUserCooldownHours: 24,
-  kycRequiredForTrading: false,
-  kycRequiredForWithdrawal: true,
-  maxDailyProfitPerUser: 500000,
-  maxTradePnlPercent: 1000,
-  apiRateLimitPerMinute: 60,
-  orderRateLimitPerMinute: 30,
-};
-
-let riskSettings = { ...DEFAULT_RISK_SETTINGS };
+const RISK_FIELDS = [
+  'maxLeverage', 'defaultLeverage', 'initialMarginRate', 'maintenanceMarginRate',
+  'maxPositionSizeUsd', 'maxOpenPositionsPerUser', 'maxOpenPositionsPerSymbol',
+  'liquidationThreshold', 'autoLiquidation', 'liquidationFeeRate',
+  'enableStopLoss', 'enableTakeProfit', 'requireStopLoss',
+  'maxDailyLossPerUser', 'maxDailyLossPlatform', 'priceDeviationAlertThreshold',
+  'restrictedSymbols', 'maintenanceMode', 'newUserCooldownHours',
+  'kycRequiredForTrading', 'kycRequiredForWithdrawal', 'maxDailyProfitPerUser',
+  'maxTradePnlPercent', 'apiRateLimitPerMinute', 'orderRateLimitPerMinute',
+];
 
 // GET /api/admin/risk — retrieve risk management settings
 export async function GET(request: NextRequest) {
   try {
-    const token = extractBearerToken(request.headers.get('authorization'));
-    if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    const payload = verifyToken(token);
-    if (!payload || (payload.role !== 'SUPER_ADMIN' && payload.role !== 'SUB_AGENT')) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
+    const { response } = authenticate(request, ['SUPER_ADMIN', 'SUB_AGENT']);
+    if (response) return response;
+
+    const settings = await getSetting(SETTINGS_KEYS.RISK);
 
     return NextResponse.json({
-      settings: riskSettings,
+      settings,
       message: 'Risk management settings retrieved successfully',
     });
   } catch (error: unknown) {
@@ -55,12 +35,8 @@ export async function GET(request: NextRequest) {
 // PUT /api/admin/risk — update risk management settings
 export async function PUT(request: NextRequest) {
   try {
-    const token = extractBearerToken(request.headers.get('authorization'));
-    if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    const payload = verifyToken(token);
-    if (!payload || payload.role !== 'SUPER_ADMIN') {
-      return NextResponse.json({ error: 'Forbidden: SUPER_ADMIN only' }, { status: 403 });
-    }
+    const { payload, response } = authenticate(request, ['SUPER_ADMIN']);
+    if (response) return response;
 
     const body = await request.json();
     const skipFields = new Set(['_id', 'createdAt', 'updatedAt']);
@@ -68,7 +44,7 @@ export async function PUT(request: NextRequest) {
 
     for (const [key, value] of Object.entries(body)) {
       if (skipFields.has(key)) continue;
-      if (key in DEFAULT_RISK_SETTINGS) {
+      if (RISK_FIELDS.includes(key)) {
         updates[key] = value;
       }
     }
@@ -96,13 +72,12 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'restrictedSymbols must be an array' }, { status: 400 });
     }
 
-    riskSettings = { ...riskSettings, ...updates };
-
+    const settings = await updateSetting(SETTINGS_KEYS.RISK, updates);
     const changedFields = Object.keys(updates);
 
     return NextResponse.json({
       message: 'Risk management settings updated successfully',
-      settings: riskSettings,
+      settings: settings.value,
       updatedFields: changedFields,
       auditInfo: { changedBy: payload.userId, changedAt: new Date().toISOString() },
     });

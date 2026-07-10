@@ -1,35 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyToken, extractBearerToken } from '@/lib/auth';
+import { authenticate } from '@/lib/rbac';
+import { getSetting, updateSetting, SETTINGS_KEYS } from '@/lib/settings';
 
-const DEFAULT_COMMISSION_SETTINGS = {
-  spotMakerFee: 0.001,
-  spotTakerFee: 0.0015,
-  futuresMakerFee: 0.0002,
-  futuresTakerFee: 0.0005,
-  agentCommissionRate: 0.15,
-  referralLevel1Rate: 0.05,
-  referralLevel2Rate: 0.02,
-  referralLevel3Rate: 0.01,
-  minCommissionUsd: 0.01,
-  maxCommissionUsd: 1000,
-  withdrawalFeeRate: 0.001,
-  depositFeeRate: 0,
-};
-
-let commissionSettings = { ...DEFAULT_COMMISSION_SETTINGS };
+const ALLOWED_FIELDS = [
+  'spotMakerFee', 'spotTakerFee', 'futuresMakerFee', 'futuresTakerFee',
+  'agentCommissionRate', 'referralLevel1Rate', 'referralLevel2Rate', 'referralLevel3Rate',
+  'minCommissionUsd', 'maxCommissionUsd', 'withdrawalFeeRate', 'depositFeeRate',
+];
 
 // GET /api/admin/commissions — retrieve commission settings
 export async function GET(request: NextRequest) {
   try {
-    const token = extractBearerToken(request.headers.get('authorization'));
-    if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    const payload = verifyToken(token);
-    if (!payload || (payload.role !== 'SUPER_ADMIN' && payload.role !== 'SUB_AGENT')) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
+    const { response } = authenticate(request, ['SUPER_ADMIN', 'SUB_AGENT']);
+    if (response) return response;
+
+    const settings = await getSetting(SETTINGS_KEYS.COMMISSIONS);
 
     return NextResponse.json({
-      settings: commissionSettings,
+      settings,
       message: 'Commission settings retrieved successfully',
     });
   } catch (error: unknown) {
@@ -41,26 +29,21 @@ export async function GET(request: NextRequest) {
 // PUT /api/admin/commissions — update commission settings
 export async function PUT(request: NextRequest) {
   try {
-    const token = extractBearerToken(request.headers.get('authorization'));
-    if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    const payload = verifyToken(token);
-    if (!payload || payload.role !== 'SUPER_ADMIN') {
-      return NextResponse.json({ error: 'Forbidden: SUPER_ADMIN only' }, { status: 403 });
-    }
+    const { response } = authenticate(request, ['SUPER_ADMIN']);
+    if (response) return response;
 
     const body = await request.json();
-    const allowedFields = Object.keys(DEFAULT_COMMISSION_SETTINGS);
     const updates: Record<string, number> = {};
 
     for (const [key, value] of Object.entries(body)) {
-      if (allowedFields.includes(key) && typeof value === 'number' && value >= 0) {
+      if (ALLOWED_FIELDS.includes(key) && typeof value === 'number' && value >= 0) {
         updates[key] = value;
       }
     }
 
     if (Object.keys(updates).length === 0) {
       return NextResponse.json(
-        { error: 'No valid fields to update. Allowed fields: ' + allowedFields.join(', ') },
+        { error: 'No valid fields to update. Allowed fields: ' + ALLOWED_FIELDS.join(', ') },
         { status: 400 },
       );
     }
@@ -78,11 +61,11 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Futures taker fee cannot exceed 1%' }, { status: 400 });
     }
 
-    commissionSettings = { ...commissionSettings, ...updates };
+    const settings = await updateSetting(SETTINGS_KEYS.COMMISSIONS, updates);
 
     return NextResponse.json({
       message: 'Commission settings updated successfully',
-      settings: commissionSettings,
+      settings: settings.value,
       updatedFields: Object.keys(updates),
     });
   } catch (error: unknown) {

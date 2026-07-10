@@ -38,6 +38,39 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Email format validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email.trim())) {
+      return NextResponse.json({ error: 'Invalid email format' }, { status: 400 });
+    }
+
+    // Password strength validation
+    if (password.length < 8) {
+      return NextResponse.json({ error: 'Password must be at least 8 characters long' }, { status: 400 });
+    }
+    if (!/[A-Z]/.test(password)) {
+      return NextResponse.json({ error: 'Password must contain at least 1 uppercase letter' }, { status: 400 });
+    }
+    if (!/[a-z]/.test(password)) {
+      return NextResponse.json({ error: 'Password must contain at least 1 lowercase letter' }, { status: 400 });
+    }
+    if (!/[0-9]/.test(password)) {
+      return NextResponse.json({ error: 'Password must contain at least 1 digit' }, { status: 400 });
+    }
+
+    // Password must not be same as email
+    if (password === email.trim()) {
+      return NextResponse.json({ error: 'Password must not be the same as your email' }, { status: 400 });
+    }
+
+    // Phone format validation (optional but if provided, must be 7-15 digits)
+    if (phone && phone.trim()) {
+      const digitsOnly = phone.replace(/\D/g, '');
+      if (digitsOnly.length < 7 || digitsOnly.length > 15) {
+        return NextResponse.json({ error: 'Phone number must be 7-15 digits' }, { status: 400 });
+      }
+    }
+
     const codeUpper = invitationCode.trim().toUpperCase();
 
     // Validate invitation code
@@ -71,6 +104,7 @@ export async function POST(req: NextRequest) {
         role,
         status: 'ACTIVE',
         phone: phone || null,
+        mustChangePassword: false,
         agentId: referrerId,          // Permanent link to Sub-Agent
         invitationCode: codeUpper,    // Permanent record of which code was used
         referredBy: referrerId,
@@ -132,6 +166,8 @@ export async function POST(req: NextRequest) {
         phone: user.phone,
         agentId: referrerId,
         invitationCode: codeUpper,
+        mustChangePassword: user.mustChangePassword,
+        createdAt: user.createdAt,
       },
     });
   } catch (error: any) {

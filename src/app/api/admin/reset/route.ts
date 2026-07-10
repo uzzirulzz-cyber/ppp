@@ -1,19 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
-import { verifyToken } from '@/lib/auth';
+import { authenticate } from '@/lib/rbac';
 
 // POST /api/admin/reset — wipe all dummy data, zero balances, keep admins + agents + codes
 export async function POST(req: NextRequest) {
   try {
     // ── Auth check ────────────────────────────────────────────
-    const authHeader = req.headers.get('authorization');
-    const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : '';
-    if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-    const payload = verifyToken(token);
-    if (!payload || (payload.role !== 'SUPER_ADMIN' && payload.role !== 'SUB_AGENT')) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
+    const { response } = authenticate(req, ['SUPER_ADMIN']);
+    if (response) return response;
 
     // ── Execute reset in a transaction ─────────────────────────
     const result = await prisma.$transaction(async (tx) => {

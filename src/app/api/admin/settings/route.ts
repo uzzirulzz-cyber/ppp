@@ -1,50 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
-import { authenticate, blockSubAgentAnalytics } from '@/lib/rbac';
+import { authenticate } from '@/lib/rbac';
+import { getSetting, updateSetting, SETTINGS_KEYS } from '@/lib/settings';
 
-const DEFAULT_SYSTEM_SETTINGS = {
-  platformName: 'NexTrade Pro',
-  platformDescription: 'Professional Crypto Trading Platform',
-  platformUrl: 'https://nextrade.pro',
-  supportEmail: 'support@nextrade.pro',
-  supportTelegram: '@nextrade_support',
-  registrationEnabled: true,
-  invitationOnly: true,
-  emailVerificationRequired: false,
-  defaultUserRole: 'USER',
-  tradingEnabled: true,
-  spotTradingEnabled: true,
-  futuresTradingEnabled: true,
-  earnEnabled: true,
-  supportedPairs: ['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'XRPUSDT', 'DOGEUSDT', 'ADAUSDT', 'AVAXUSDT', 'DOTUSDT', 'LINKUSDT'],
-  defaultCurrency: 'USDT',
-  depositsEnabled: true,
-  withdrawalsEnabled: true,
-  minDepositUsd: 10,
-  maxWithdrawalPerDay: 50000,
-  minWithdrawalUsd: 5,
-  twoFactorRequired: false,
-  sessionTimeoutMinutes: 60,
-  maxLoginAttempts: 5,
-  lockoutDurationMinutes: 30,
-  ipWhitelist: [] as string[],
-  primaryColor: '#10b981',
-  logoUrl: '',
-  faviconUrl: '',
-  maintenanceMode: false,
-  maintenanceMessage: 'NexTrade Pro is undergoing scheduled maintenance. We will be back shortly.',
-  scheduledMaintenanceStart: null as string | null,
-  scheduledMaintenanceEnd: null as string | null,
-  emailNotifications: true,
-  pushNotifications: true,
-  smsNotifications: false,
-  apiDocsEnabled: true,
-  maxApiKeysPerUser: 5,
-  termsOfServiceUrl: '/terms',
-  privacyPolicyUrl: '/privacy',
-};
-
-let systemSettings = { ...DEFAULT_SYSTEM_SETTINGS };
+const SYSTEM_FIELDS = [
+  'platformName', 'platformDescription', 'platformUrl', 'supportEmail',
+  'supportTelegram', 'registrationEnabled', 'invitationOnly',
+  'emailVerificationRequired', 'defaultUserRole', 'tradingEnabled',
+  'spotTradingEnabled', 'futuresTradingEnabled', 'earnEnabled',
+  'supportedPairs', 'defaultCurrency', 'depositsEnabled', 'withdrawalsEnabled',
+  'minDepositUsd', 'maxWithdrawalPerDay', 'minWithdrawalUsd',
+  'twoFactorRequired', 'sessionTimeoutMinutes', 'maxLoginAttempts',
+  'lockoutDurationMinutes', 'ipWhitelist', 'primaryColor',
+  'logoUrl', 'faviconUrl', 'maintenanceMode',
+  'maintenanceMessage', 'scheduledMaintenanceStart', 'scheduledMaintenanceEnd',
+  'emailNotifications', 'pushNotifications', 'smsNotifications',
+  'apiDocsEnabled', 'maxApiKeysPerUser', 'termsOfServiceUrl',
+  'privacyPolicyUrl',
+];
 
 // GET /api/admin/settings — retrieve system settings
 export async function GET(request: NextRequest) {
@@ -52,13 +25,14 @@ export async function GET(request: NextRequest) {
     const { payload, response } = authenticate(request, ['SUPER_ADMIN', 'SUB_AGENT']);
     if (response) return response;
 
-    const [totalUsers, activeUsers] = await Promise.all([
+    const [totalUsers, activeUsers, settings] = await Promise.all([
       prisma.user.count(),
       prisma.user.count({ where: { status: 'ACTIVE' } }),
+      getSetting(SETTINGS_KEYS.SYSTEM),
     ]);
 
     return NextResponse.json({
-      settings: systemSettings,
+      settings,
       platformStats: { totalUsers, activeUsers },
       message: 'System settings retrieved successfully',
     });
@@ -80,7 +54,7 @@ export async function PUT(request: NextRequest) {
 
     for (const [key, value] of Object.entries(body)) {
       if (skipFields.has(key)) continue;
-      if (key in DEFAULT_SYSTEM_SETTINGS) {
+      if (SYSTEM_FIELDS.includes(key)) {
         updates[key] = value;
       }
     }
@@ -96,22 +70,23 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'ipWhitelist must be an array' }, { status: 400 });
     }
 
+    const currentSettings = await getSetting(SETTINGS_KEYS.SYSTEM);
     const warnings: string[] = [];
-    if (updates.maintenanceMode === true && !systemSettings.maintenanceMode) {
+    if (updates.maintenanceMode === true && !currentSettings.maintenanceMode) {
       warnings.push('Maintenance mode has been ENABLED. All users will see the maintenance page.');
     }
-    if (updates.tradingEnabled === false && systemSettings.tradingEnabled) {
+    if (updates.tradingEnabled === false && currentSettings.tradingEnabled) {
       warnings.push('Trading has been DISABLED. All open orders will remain but new orders will be rejected.');
     }
-    if (updates.withdrawalsEnabled === false && systemSettings.withdrawalsEnabled) {
+    if (updates.withdrawalsEnabled === false && currentSettings.withdrawalsEnabled) {
       warnings.push('Withdrawals have been DISABLED. Pending withdrawals will need manual review.');
     }
 
-    systemSettings = { ...systemSettings, ...updates };
+    const settings = await updateSetting(SETTINGS_KEYS.SYSTEM, updates);
 
     return NextResponse.json({
       message: 'System settings updated successfully',
-      settings: systemSettings,
+      settings: settings.value,
       updatedFields: Object.keys(updates),
       warnings: warnings.length > 0 ? warnings : undefined,
     });
