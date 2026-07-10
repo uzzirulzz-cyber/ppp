@@ -122,7 +122,7 @@ export default function AdminLockScreen() {
                 <ShieldCheck className="h-6 w-6 text-blue-400" />
               </div>
               <span className="text-2xl font-bold text-white tracking-tight">
-                Brock Exchange
+                NextradePro.Top
               </span>
             </div>
             <h2 className="text-lg font-semibold text-white mt-3 flex items-center gap-2">

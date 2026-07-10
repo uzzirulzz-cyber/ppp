@@ -111,13 +111,13 @@ export default function ChangePasswordPage() {
         <div className="text-center mb-6">
           <Image
             src="/logo.png"
-            alt="Brock Exchange"
+            alt="NextradePro.Top"
             width={48}
             height={48}
             style={{ borderRadius: 10, margin: '0 auto 12px' }}
           />
           <h1 className="gradient-text" style={{ fontSize: 24, fontWeight: 800 }}>
-            Brock Exchange
+            NextradePro.Top
           </h1>
         </div>
 

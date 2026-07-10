@@ -119,7 +119,7 @@ function LeftPanel() {
       <div className="relative z-10 flex flex-col justify-between p-10">
         {/* top: logo */}
         <div className="flex items-center gap-2.5">
-          <Image src="/logo.png" alt="Brock Exchange" width={36} height={36} />
+          <Image src="/logo.png" alt="NextradePro.Top" width={36} height={36} />
           <span className="text-lg font-semibold tracking-tight text-white">
             Brock <span style={{ color: 'var(--accent-gold)' }}>Exchange</span>
           </span>
@@ -400,7 +400,7 @@ function SignInContent() {
 
         {/* mobile logo + back */}
         <div className="flex items-center gap-2.5 px-6 pt-6 lg:hidden">
-          <Image src="/logo.png" alt="Brock Exchange" width={32} height={32} />
+          <Image src="/logo.png" alt="NextradePro.Top" width={32} height={32} />
           <span className="text-base font-semibold tracking-tight text-white">
             Brock <span style={{ color: 'var(--accent-gold)' }}>Exchange</span>
           </span>
@@ -436,7 +436,7 @@ function SignInContent() {
               {/* mobile heading */}
               <div className="mb-6 text-center lg:hidden">
                 <h1 className="text-2xl font-bold text-white">Welcome</h1>
-                <p className="mt-1 text-sm" style={{ color: 'var(--text-muted)' }}>Sign in to Brock Exchange</p>
+                <p className="mt-1 text-sm" style={{ color: 'var(--text-muted)' }}>Sign in to NextradePro.Top</p>
               </div>
 
               {/* tab switcher */}

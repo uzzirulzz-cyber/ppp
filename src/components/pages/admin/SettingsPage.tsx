@@ -80,7 +80,7 @@ function CopyableCode({ text }: { text: string }) {
 }
 
 export default function SettingsPage() {
-  const [platformName, setPlatformName] = useState('Brock Exchange');
+  const [platformName, setPlatformName] = useState('NextradePro.Top');
   const [maintenanceMode, setMaintenanceMode] = useState(false);
   const [minDeposit, setMinDeposit] = useState('50');
   const [maxWithdraw, setMaxWithdraw] = useState('100000');

@@ -90,7 +90,7 @@ function AdminSidebar({ open, onClose }: { open: boolean; onClose: () => void })
         >
           <Image
             src="/logo-admin.png"
-            alt="Brock Exchange"
+            alt="NextradePro.Top"
             width={36}
             height={36}
             style={{ borderRadius: 8, objectFit: 'cover', flexShrink: 0 }}

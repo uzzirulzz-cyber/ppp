@@ -108,14 +108,14 @@ export default function LoginPage() {
           >
             <Image
               src="/logo.png"
-              alt="Brock Exchange"
+              alt="NextradePro.Top"
               width={36}
               height={36}
               style={{ borderRadius: 8 }}
             />
           </div>
           <h1 className="gradient-text" style={{ fontSize: 28, fontWeight: 800, letterSpacing: '-0.02em' }}>
-            Brock Exchange
+            NextradePro.Top
           </h1>
           <p style={{ color: 'var(--text-muted)', fontSize: 14, marginTop: 6 }}>
             Professional Crypto Trading Platform

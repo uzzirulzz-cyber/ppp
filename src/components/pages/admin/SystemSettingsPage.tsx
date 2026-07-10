@@ -29,7 +29,7 @@ interface SystemSettings {
 }
 
 const defaultSettings: SystemSettings = {
-  platformName: 'Brock Exchange',
+  platformName: 'NextradePro.Top',
   supportEmail: 'support@brock.exchange',
   maintenanceMode: false,
   allowRegistration: true,

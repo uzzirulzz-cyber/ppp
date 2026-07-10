@@ -209,13 +209,13 @@ export default function RegisterPage() {
               background: 'var(--gradient)',
             }}
           >
-            <Image src="/logo.png" alt="Brock Exchange" width={28} height={28} style={{ borderRadius: 6 }} />
+            <Image src="/logo.png" alt="NextradePro.Top" width={28} height={28} style={{ borderRadius: 6 }} />
           </div>
           <h1 className="gradient-text" style={{ fontSize: 24, fontWeight: 800, letterSpacing: '-0.02em' }}>
             Create Account
           </h1>
           <p style={{ color: 'var(--text-muted)', fontSize: 13, marginTop: 4 }}>
-            Join Brock Exchange and start trading
+            Join NextradePro.Top and start trading
           </p>
         </div>
 

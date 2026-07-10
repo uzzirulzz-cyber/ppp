@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 
 /* ═══════════════════════════════════════════════════════════════
-   Brock Exchange Theme — Black / Gold / Neon Cyan
+   NextradePro.Top Theme — Black / Gold / Neon Cyan
    ═══════════════════════════════════════════════════════════════ */
 const T = {
   bgDarkest: '#07090f',
@@ -249,7 +249,7 @@ function Navbar() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
           <Image
             src="/logo.png"
-            alt="Brock Exchange"
+            alt="NextradePro.Top"
             width={36}
             height={36}
             style={{ borderRadius: 8 }}
@@ -584,7 +584,7 @@ function HeroSection() {
             fontWeight: 400,
           }}
         >
-          Brock Exchange offers institutional-grade trading with lightning-fast execution,
+          NextradePro.Top offers institutional-grade trading with lightning-fast execution,
           deep liquidity, and 24/7 support.
         </motion.p>
 
@@ -952,7 +952,7 @@ function FeaturesSection() {
             marginBottom: 12,
           }}
         >
-          Why Brock Exchange
+          Why NextradePro.Top
         </span>
         <h2
           style={{
@@ -1379,7 +1379,7 @@ function CTASection() {
             lineHeight: 1.6,
           }}
         >
-          Join thousands of traders on Brock Exchange and experience the future of digital asset trading.
+          Join thousands of traders on NextradePro.Top and experience the future of digital asset trading.
         </p>
         <div style={{ display: 'flex', gap: 16, justifyContent: 'center', flexWrap: 'wrap' }}>
           <button
@@ -1445,7 +1445,7 @@ function Footer() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
               <Image
                 src="/logo.png"
-                alt="Brock Exchange"
+                alt="NextradePro.Top"
                 width={32}
                 height={32}
                 style={{ borderRadius: 6 }}
@@ -1518,7 +1518,7 @@ function Footer() {
           }}
         >
           <span style={{ fontSize: 13, color: T.textMuted }}>
-            © 2024 Brock Exchange. All rights reserved.
+            © 2024 NextradePro.Top. All rights reserved.
           </span>
           <div style={{ display: 'flex', gap: 20 }}>
             {socialLinks.map((s) => (

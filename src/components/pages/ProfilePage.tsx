@@ -178,7 +178,7 @@ export default function ProfilePage() {
         variants={itemVariants}
       >
         <div className="flex flex-col sm:flex-row items-center sm:items-start gap-5">
-          {/* Avatar — Brock Exchange gold → cyan gradient */}
+          {/* Avatar — NextradePro.Top gold → cyan gradient */}
           <div
             className="flex items-center justify-center rounded-full shrink-0"
             style={{

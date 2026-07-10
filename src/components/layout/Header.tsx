@@ -17,7 +17,7 @@ import {
 import { useStore, Pages } from '@/store/useStore';
 
 const pageTitles: Record<string, string> = {
-  [Pages.HOME]: 'Brock Exchange',
+  [Pages.HOME]: 'NextradePro.Top',
   [Pages.LOGIN]: 'Sign In',
   [Pages.REGISTER]: 'Create Account',
   [Pages.DASHBOARD]: 'Dashboard',
@@ -61,7 +61,7 @@ export default function Header() {
   const [walletBalance, setWalletBalance] = useState<number | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const title = pageTitles[currentPage] || 'Brock Exchange';
+  const title = pageTitles[currentPage] || 'NextradePro.Top';
 
   // Fetch wallet balance
   useEffect(() => {
