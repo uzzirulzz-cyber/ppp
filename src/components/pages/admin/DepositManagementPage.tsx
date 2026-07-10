@@ -3,15 +3,15 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import {
+  ArrowDownLeft,
+  Search,
   CheckCircle,
   XCircle,
   Clock,
-  DollarSign,
-  Search,
   ChevronLeft,
   ChevronRight,
+  Wallet,
   AlertTriangle,
-  ArrowDownCircle,
 } from 'lucide-react';
 import { useStore } from '@/store/useStore';
 
@@ -19,12 +19,13 @@ import { useStore } from '@/store/useStore';
 interface DepositUser {
   name: string;
   email: string;
+  phone?: string;
 }
 
 interface Deposit {
-  _id: string;
   id: string;
   userId: string;
+  user: DepositUser | null;
   currency: string;
   amount: number;
   fee: number;
@@ -34,7 +35,6 @@ interface Deposit {
   note: string | null;
   description: string | null;
   createdAt: string;
-  user: DepositUser;
 }
 
 interface Pagination {
@@ -55,15 +55,20 @@ const itemVariants = {
 };
 
 /* ─── Status helpers ─── */
-const STATUS_OPTIONS = ['All', 'Pending', 'Completed', 'Failed'] as const;
-
 function statusBadge(status: string) {
-  const map: Record<string, string> = {
-    PENDING: 'badge-amber',
-    COMPLETED: 'badge-green',
-    FAILED: 'badge-red',
-  };
-  return map[status] || 'badge-amber';
+  return { PENDING: 'badge-amber', COMPLETED: 'badge-green', FAILED: 'badge-red', CANCELLED: 'badge-silver' }[status] || 'badge-amber';
+}
+
+function statusIcon(status: string) {
+  switch (status) {
+    case 'COMPLETED':
+      return <CheckCircle size={16} style={{ color: '#22c55e' }} />;
+    case 'FAILED':
+    case 'CANCELLED':
+      return <XCircle size={16} style={{ color: '#FF3D57' }} />;
+    default:
+      return <Clock size={16} style={{ color: '#f59e0b' }} />;
+  }
 }
 
 function formatDate(dateStr: string) {
@@ -80,14 +85,8 @@ function formatDate(dateStr: string) {
   }
 }
 
-function truncateHash(hash: string | null, maxLen = 18) {
-  if (!hash) return '—';
-  if (hash.length <= maxLen) return hash;
-  return `${hash.slice(0, maxLen - 3)}...`;
-}
-
-function formatCurrency(amount: number, currency: string) {
-  return `${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`;
+function formatAmount(amount: number) {
+  return `$${amount.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
 }
 
 /* ─── Component ─── */
@@ -96,20 +95,18 @@ export default function DepositManagementPage() {
 
   // Data state
   const [deposits, setDeposits] = useState<Deposit[]>([]);
-  const [pagination, setPagination] = useState<Pagination>({ page: 1, limit: 50, total: 0, totalPages: 1 });
+  const [pagination, setPagination] = useState<Pagination>({ page: 1, limit: 20, total: 0, totalPages: 1 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [successMsg, setSuccessMsg] = useState('');
 
   // Filters
   const [statusFilter, setStatusFilter] = useState('All');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
-  const limit = 50;
+  const limit = 20;
 
   // Action state
-  const [actionLoading, setActionLoading] = useState(false);
-  const [actioningId, setActioningId] = useState<string | null>(null);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   /* ─── Fetch deposits ─── */
   const fetchDeposits = useCallback(async () => {
@@ -121,7 +118,10 @@ export default function DepositManagementPage() {
         limit: String(limit),
       });
       if (statusFilter !== 'All') {
-        params.set('status', statusFilter.toUpperCase());
+        params.set('status', statusFilter);
+      }
+      if (search.trim()) {
+        params.set('search', search.trim());
       }
       const res = await fetch(`/api/admin/deposits?${params}`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -129,125 +129,110 @@ export default function DepositManagementPage() {
       if (!res.ok) throw new Error('Failed to fetch deposits');
       const data = await res.json();
       setDeposits(data.deposits || []);
-      setPagination(data.pagination || { page: 1, limit: 50, total: 0, totalPages: 1 });
+      setPagination(data.pagination || { page: 1, limit: 20, total: 0, totalPages: 1 });
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to load deposits');
     } finally {
       setLoading(false);
     }
-  }, [token, page, statusFilter]);
+  }, [token, page, statusFilter, search]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void fetchDeposits();
   }, [fetchDeposits]);
 
-  /* ─── Approve ─── */
-  async function handleApprove(txId: string) {
-    if (!confirm('Are you sure you want to approve this deposit? This will credit the user\'s balance.')) return;
-    setActioningId(txId);
-    setActionLoading(true);
-    setSuccessMsg('');
+  /* ─── Approve / Reject handler ─── */
+  async function handleAction(txId: string, action: 'approve' | 'reject') {
+    setActionLoading(txId);
     try {
-      const res = await fetch(`/api/admin/deposits`, {
+      const res = await fetch('/api/admin/deposits', {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ txId, action: 'approve' }),
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ txId, action, note: '' }),
       });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || 'Failed to approve deposit');
-      }
-      setSuccessMsg('Deposit approved and balance credited successfully.');
+      if (!res.ok) throw new Error('Action failed');
       fetchDeposits();
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Failed to approve deposit');
+      setError(err instanceof Error ? err.message : 'Action failed');
     } finally {
-      setActioningId(null);
-      setActionLoading(false);
-    }
-  }
-
-  /* ─── Reject ─── */
-  async function handleReject(txId: string) {
-    if (!confirm('Are you sure you want to reject this deposit?')) return;
-    setActioningId(txId);
-    setActionLoading(true);
-    setSuccessMsg('');
-    try {
-      const res = await fetch(`/api/admin/deposits`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ txId, action: 'reject' }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || 'Failed to reject deposit');
-      }
-      setSuccessMsg('Deposit rejected successfully.');
-      fetchDeposits();
-    } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Failed to reject deposit');
-    } finally {
-      setActioningId(null);
-      setActionLoading(false);
+      setActionLoading(null);
     }
   }
 
   /* ─── Filter change ─── */
-  function handleFilterChange(filter: string) {
-    setStatusFilter(filter);
+  function handleFilterChange(val: string) {
+    setStatusFilter(val);
     setPage(1);
   }
 
-  /* ─── Client-side search filter ─── */
-  const filteredDeposits = deposits.filter((d) => {
-    if (!search) return true;
-    const q = search.toLowerCase();
-    return (
-      (d.user?.name || '').toLowerCase().includes(q) ||
-      (d.user?.email || '').toLowerCase().includes(q) ||
-      (d.txHash || '').toLowerCase().includes(q) ||
-      (d.userId || '').toLowerCase().includes(q)
-    );
-  });
+  function handleSearchChange(val: string) {
+    setSearch(val);
+    setPage(1);
+  }
+
+  /* ─── Computed stats ─── */
+  const totalDeposits = pagination.total;
+  const pendingCount = deposits.filter((d) => d.status === 'PENDING').length;
+  const approvedCount = deposits.filter((d) => d.status === 'COMPLETED').length;
+  const totalAmount = deposits.reduce((sum, d) => sum + d.amount, 0);
 
   /* ─── Stat cards ─── */
-  const pendingCount = deposits.filter((d) => d.status === 'PENDING').length;
-  const pendingAmount = deposits.filter((d) => d.status === 'PENDING').reduce((a, d) => a + d.amount, 0);
-
   const statCards = [
     {
-      label: 'Pending Requests',
+      label: 'Total Deposits',
+      value: totalDeposits,
+      icon: Wallet,
+      color: '#E53935',
+      bgColor: 'rgba(229, 57, 53, 0.08)',
+      borderColor: 'rgba(229, 57, 53, 0.2)',
+    },
+    {
+      label: 'Pending',
       value: pendingCount,
       icon: Clock,
-      color: '#f5b400',
-      bgColor: 'rgba(245, 180, 0, 0.08)',
-      borderColor: 'rgba(245, 180, 0, 0.2)',
+      color: '#f59e0b',
+      bgColor: 'rgba(245, 158, 11, 0.08)',
+      borderColor: 'rgba(245, 158, 11, 0.2)',
     },
     {
-      label: 'Pending Amount',
-      value: formatCurrency(pendingAmount, 'USDT'),
-      icon: DollarSign,
-      color: '#0F5EFF',
-      bgColor: 'rgba(59, 130, 246, 0.08)',
-      borderColor: 'rgba(59, 130, 246, 0.2)',
+      label: 'Approved',
+      value: approvedCount,
+      icon: CheckCircle,
+      color: '#22c55e',
+      bgColor: 'rgba(34, 197, 94, 0.08)',
+      borderColor: 'rgba(34, 197, 94, 0.2)',
     },
     {
-      label: 'Total Records',
-      value: pagination.total,
-      icon: ArrowDownCircle,
-      color: '#00E676',
-      bgColor: 'rgba(74, 222, 128, 0.08)',
-      borderColor: 'rgba(74, 222, 128, 0.2)',
+      label: 'Total Amount',
+      value: formatAmount(totalAmount),
+      icon: ArrowDownLeft,
+      color: '#FFD700',
+      bgColor: 'rgba(255, 215, 0, 0.08)',
+      borderColor: 'rgba(255, 215, 0, 0.2)',
     },
   ];
+
+  /* ─── Pagination helpers ─── */
+  const startItem = pagination.total > 0 ? (pagination.page - 1) * pagination.limit + 1 : 0;
+  const endItem = Math.min(pagination.page * pagination.limit, pagination.total);
+
+  function getPageNumbers(current: number, total: number): (number | '...')[] {
+    if (total <= 5) {
+      return Array.from({ length: total }, (_, i) => i + 1);
+    }
+    const pages: (number | '...')[] = [];
+    if (current <= 3) {
+      pages.push(1, 2, 3, 4, '...', total);
+    } else if (current >= total - 2) {
+      pages.push(1, '...', total - 3, total - 2, total - 1, total);
+    } else {
+      pages.push(1, '...', current - 1, current, current + 1, '...', total);
+    }
+    return pages;
+  }
+
+  const pageNumbers = getPageNumbers(pagination.page, pagination.totalPages);
 
   /* ─── Loading state ─── */
   if (loading && deposits.length === 0) {
@@ -282,8 +267,8 @@ export default function DepositManagementPage() {
         </p>
       </motion.div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      {/* Stats Cards */}
+      <motion.div className="grid grid-cols-2 lg:grid-cols-4 gap-4" variants={itemVariants}>
         {statCards.map((s) => {
           const Icon = s.icon;
           return (
@@ -314,89 +299,55 @@ export default function DepositManagementPage() {
             </motion.div>
           );
         })}
-      </div>
+      </motion.div>
 
-      {/* Filter Bar */}
+      {/* Filters */}
       <motion.div className="glass-card p-4" variants={itemVariants}>
-        <div className="flex flex-wrap gap-2 items-center">
-          <span className="text-sm font-medium mr-1" style={{ color: 'var(--text-muted)' }}>
-            <Search size={14} className="inline -mt-0.5 mr-1" />
-            Status:
-          </span>
-          {STATUS_OPTIONS.map((opt) => {
-            const isActive = statusFilter === opt;
-            return (
-              <button
-                key={opt}
-                onClick={() => handleFilterChange(opt)}
-                style={{
-                  padding: '6px 16px',
-                  borderRadius: 'var(--radius-md)',
-                  fontSize: 13,
-                  fontWeight: 500,
-                  fontFamily: 'Inter, sans-serif',
-                  cursor: 'pointer',
-                  transition: 'all 0.15s',
-                  border: 'none',
-                  background: isActive ? '#0F5EFF' : 'var(--bg-hover)',
-                  color: isActive ? '#ffffff' : 'var(--text-secondary)',
-                }}
-                onMouseEnter={(e) => {
-                  if (!isActive) {
-                    e.currentTarget.style.background = 'var(--bg-hover-subtle)';
-                    e.currentTarget.style.color = 'var(--text-primary)';
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (!isActive) {
-                    e.currentTarget.style.background = 'var(--bg-hover)';
-                    e.currentTarget.style.color = 'var(--text-secondary)';
-                  }
-                }}
-              >
-                {opt}
-              </button>
-            );
-          })}
-
+        <div className="flex flex-wrap gap-3 items-center">
           {/* Search input */}
-          <div className="ml-auto">
-            <div className="relative">
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--text-muted)' }} />
-              <input
-                type="text"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search user, email, or tx hash..."
-                className="input-field"
-                style={{ fontSize: 13, padding: '7px 12px 7px 32px', width: 260 }}
-              />
-            </div>
+          <div className="relative flex-1 min-w-[200px] max-w-sm">
+            <Search
+              size={14}
+              className="absolute left-3 top-1/2 -translate-y-1/2"
+              style={{ color: 'var(--text-muted)' }}
+            />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => handleSearchChange(e.target.value)}
+              placeholder="Search by name or email..."
+              className="input-field"
+              style={{ fontSize: 13, padding: '8px 12px 8px 34px', width: '100%' }}
+            />
           </div>
+
+          {/* Status dropdown */}
+          <select
+            value={statusFilter}
+            onChange={(e) => handleFilterChange(e.target.value)}
+            className="input-field"
+            style={{
+              fontSize: 13,
+              padding: '8px 12px',
+              minWidth: 160,
+              background: 'var(--bg-hover)',
+              color: 'var(--text-secondary)',
+              border: '1px solid var(--border-color)',
+              borderRadius: 'var(--radius-md)',
+              cursor: 'pointer',
+              fontFamily: 'Inter, sans-serif',
+            }}
+          >
+            <option value="All">All Statuses</option>
+            <option value="PENDING">Pending</option>
+            <option value="COMPLETED">Completed</option>
+            <option value="FAILED">Failed</option>
+            <option value="CANCELLED">Cancelled</option>
+          </select>
         </div>
       </motion.div>
 
-      {/* Success message */}
-      {successMsg && (
-        <motion.div
-          className="glass-card p-4"
-          variants={itemVariants}
-          style={{ borderColor: 'rgba(74, 222, 128, 0.3)' }}
-        >
-          <div className="flex items-center gap-2">
-            <CheckCircle size={16} style={{ color: '#00E676' }} />
-            <p style={{ color: '#00E676' }}>{successMsg}</p>
-            <button
-              onClick={() => setSuccessMsg('')}
-              style={{ marginLeft: 'auto', color: 'var(--text-muted)', cursor: 'pointer', background: 'none', border: 'none' }}
-            >
-              &times;
-            </button>
-          </div>
-        </motion.div>
-      )}
-
-      {/* Error */}
+      {/* Error state */}
       {error && (
         <motion.div
           className="glass-card p-4"
@@ -417,134 +368,117 @@ export default function DepositManagementPage() {
             <thead>
               <tr>
                 <th>User</th>
-                <th>Amount</th>
                 <th>Currency</th>
-                <th>Method</th>
-                <th>TX Hash</th>
+                <th>Amount</th>
+                <th>Fee</th>
                 <th>Status</th>
+                <th>Method</th>
                 <th>Date</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {filteredDeposits.length === 0 ? (
+              {deposits.length === 0 ? (
                 <tr>
-                  <td
-                    colSpan={8}
-                    className="text-center py-8"
-                    style={{ color: 'var(--text-muted)' }}
-                  >
-                    No deposit requests found
+                  <td colSpan={8} className="text-center py-12">
+                    <div className="flex flex-col items-center gap-3">
+                      <ArrowDownLeft size={48} style={{ opacity: 0.4, color: 'var(--text-muted)' }} />
+                      <p style={{ color: 'var(--text-muted)' }}>No deposit requests found</p>
+                    </div>
                   </td>
                 </tr>
               ) : (
-                filteredDeposits.map((d) => (
-                  <tr key={d.id || d._id}>
-                    {/* User */}
-                    <td>
-                      <div>
-                        <div
-                          className="font-semibold text-sm"
-                          style={{ color: 'var(--text-primary)' }}
-                        >
-                          {d.user?.name || 'Unknown'}
+                deposits.map((d) => {
+                  const methodDisplay = d.method || d.description || '—';
+                  return (
+                    <tr key={d.id}>
+                      {/* User */}
+                      <td>
+                        <div>
+                          <div className="font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>
+                            {d.user?.name || 'Unknown'}
+                          </div>
+                          <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                            {d.user?.email || '—'}
+                          </div>
                         </div>
-                        <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                          {d.user?.email || '—'}
-                        </div>
-                      </div>
-                    </td>
+                      </td>
 
-                    {/* Amount */}
-                    <td>
-                      <div
-                        className="font-semibold text-sm"
-                        style={{ color: 'var(--text-primary)' }}
-                      >
-                        {d.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </div>
-                    </td>
-
-                    {/* Currency */}
-                    <td>
-                      <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-                        {d.currency || '—'}
-                      </span>
-                    </td>
-
-                    {/* Method */}
-                    <td>
-                      <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-                        {d.method || '—'}
-                      </span>
-                    </td>
-
-                    {/* TX Hash */}
-                    <td>
-                      <code
-                        className="text-xs"
-                        style={{ color: 'var(--text-muted)' }}
-                        title={d.txHash || ''}
-                      >
-                        {truncateHash(d.txHash)}
-                      </code>
-                    </td>
-
-                    {/* Status */}
-                    <td>
-                      <span className={`badge ${statusBadge(d.status)}`}>
-                        {d.status}
-                      </span>
-                    </td>
-
-                    {/* Date */}
-                    <td>
-                      <span className="text-sm" style={{ color: 'var(--text-muted)' }}>
-                        {formatDate(d.createdAt)}
-                      </span>
-                    </td>
-
-                    {/* Actions */}
-                    <td>
-                      {d.status === 'PENDING' ? (
-                        <div className="flex items-center gap-2">
-                          <button
-                            className="btn-primary py-1.5 px-3 text-xs"
-                            style={{ padding: '6px 14px', fontSize: 12 }}
-                            disabled={actionLoading || actioningId === (d.id || d._id)}
-                            onClick={() => handleApprove(d.id || d._id)}
-                          >
-                            <CheckCircle size={14} className="inline -mt-0.5 mr-1" />
-                            Approve
-                          </button>
-                          <button
-                            disabled={actionLoading || actioningId === (d.id || d._id)}
-                            style={{
-                              padding: '6px 14px',
-                              fontSize: 12,
-                              fontWeight: 600,
-                              fontFamily: 'Inter, sans-serif',
-                              cursor: 'pointer',
-                              background: 'rgba(239, 68, 68, 0.15)',
-                              color: '#ff3d57',
-                              border: '1px solid rgba(239, 68, 68, 0.3)',
-                              borderRadius: 'var(--radius-md)',
-                              transition: 'all 0.15s',
-                            }}
-                            onClick={() => handleReject(d.id || d._id)}
-                          >
-                            <XCircle size={14} className="inline -mt-0.5 mr-1" />
-                            Reject
-                          </button>
-                        </div>
-                      ) : (
-                        <span className="text-sm" style={{ color: 'var(--text-muted)' }}>
-                          —
+                      {/* Currency */}
+                      <td>
+                        <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                          {d.currency || '—'}
                         </span>
-                      )}
-                    </td>
-                  </tr>
-                ))
+                      </td>
+
+                      {/* Amount */}
+                      <td>
+                        <div className="font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>
+                          {d.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </div>
+                      </td>
+
+                      {/* Fee */}
+                      <td>
+                        <span className="text-sm" style={{ color: 'var(--text-muted)' }}>
+                          {d.fee > 0 ? d.fee.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}
+                        </span>
+                      </td>
+
+                      {/* Status */}
+                      <td>
+                        <span className={`badge ${statusBadge(d.status)}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                          {statusIcon(d.status)}
+                          {d.status}
+                        </span>
+                      </td>
+
+                      {/* Method */}
+                      <td>
+                        <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                          {methodDisplay}
+                        </span>
+                      </td>
+
+                      {/* Date */}
+                      <td>
+                        <span className="text-sm" style={{ color: 'var(--text-muted)' }}>
+                          {formatDate(d.createdAt)}
+                        </span>
+                      </td>
+
+                      {/* Actions */}
+                      <td>
+                        {d.status === 'PENDING' ? (
+                          <div className="flex items-center gap-2">
+                            <button
+                              className="btn-primary"
+                              style={{ padding: '6px 14px', fontSize: 12 }}
+                              disabled={actionLoading === d.id}
+                              onClick={() => handleAction(d.id, 'approve')}
+                            >
+                              <CheckCircle size={14} className="inline -mt-0.5 mr-1" />
+                              Approve
+                            </button>
+                            <button
+                              className="btn-danger"
+                              style={{ padding: '6px 14px', fontSize: 12 }}
+                              disabled={actionLoading === d.id}
+                              onClick={() => handleAction(d.id, 'reject')}
+                            >
+                              <XCircle size={14} className="inline -mt-0.5 mr-1" />
+                              Reject
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="text-sm" style={{ color: 'var(--text-muted)' }}>
+                            —
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -556,23 +490,49 @@ export default function DepositManagementPage() {
           style={{ borderColor: 'var(--border-color)' }}
         >
           <span className="text-sm" style={{ color: 'var(--text-muted)' }}>
-            Page {pagination.page} of {pagination.totalPages}
+            Showing {startItem}–{endItem} of {pagination.total}
           </span>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <button
-              className="btn-secondary py-1 px-3 text-sm"
-              style={{ padding: '6px 12px' }}
+              className="btn-secondary"
+              style={{ padding: '6px 10px' }}
               disabled={pagination.page <= 1 || loading}
               onClick={() => setPage((p) => p - 1)}
             >
               <ChevronLeft size={16} />
             </button>
-            <span className="text-sm px-2" style={{ color: 'var(--text-secondary)' }}>
-              {pagination.page} / {pagination.totalPages}
-            </span>
+
+            {pageNumbers.map((p, idx) =>
+              p === '...' ? (
+                <span key={`dots-${idx}`} className="text-sm px-1.5" style={{ color: 'var(--text-muted)' }}>
+                  ...
+                </span>
+              ) : (
+                <button
+                  key={p}
+                  onClick={() => setPage(p)}
+                  disabled={loading}
+                  style={{
+                    padding: '5px 10px',
+                    fontSize: 13,
+                    fontWeight: 500,
+                    fontFamily: 'Inter, sans-serif',
+                    cursor: pagination.page === p ? 'default' : 'pointer',
+                    borderRadius: 'var(--radius-md)',
+                    border: 'none',
+                    transition: 'all 0.15s',
+                    background: pagination.page === p ? '#0F5EFF' : 'transparent',
+                    color: pagination.page === p ? '#ffffff' : 'var(--text-secondary)',
+                  }}
+                >
+                  {p}
+                </button>
+              )
+            )}
+
             <button
-              className="btn-secondary py-1 px-3 text-sm"
-              style={{ padding: '6px 12px' }}
+              className="btn-secondary"
+              style={{ padding: '6px 10px' }}
               disabled={pagination.page >= pagination.totalPages || loading}
               onClick={() => setPage((p) => p + 1)}
             >

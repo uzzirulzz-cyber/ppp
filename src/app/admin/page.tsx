@@ -1,2 +1,2 @@
-import RevenueAnalyticsPage from '@/components/pages/admin/RevenueAnalyticsPage';
-export default function AdminDashboard() { return <RevenueAnalyticsPage />; }
+import AdminDashboardPage from '@/components/pages/admin/AdminDashboardPage';
+export default function AdminDashboard() { return <AdminDashboardPage />; }

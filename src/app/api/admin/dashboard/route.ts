@@ -1,80 +1,99 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
-import { authenticate } from '@/lib/rbac';
+import { authenticate, getAccessibleUserIds } from '@/lib/rbac';
 
-// GET /api/admin/dashboard — Dashboard stats with RBAC
+// GET /api/admin/dashboard — Real dashboard stats with RBAC
 export async function GET(request: NextRequest) {
   try {
     const { payload, response } = authenticate(request, ['SUPER_ADMIN', 'SUB_AGENT']);
     if (response) return response;
-    const { searchParams } = new URL(request.url);
 
-    // Build RBAC filter for user counts
+    const isSA = payload!.role === 'SUPER_ADMIN';
+
+    // ── User counts with RBAC ──
     const userFilter: Record<string, unknown> = { role: 'USER' };
-    if (payload!.role === 'SUB_AGENT') {
-      userFilter.agentId = payload!.userId;
+    let customerIds: string[] | null = null;
+    if (!isSA) {
+      customerIds = await getAccessibleUserIds(payload!);
+      // For user counts, sub-agent sees users where agentId = their ID
+      Object.assign(userFilter, { agentId: payload!.userId });
     }
 
-    // Build trade/deposit/withdrawal filter for sub-agents
-    const tradeFilter: Record<string, unknown> = {};
-    if (payload!.role === 'SUB_AGENT') {
-      const myCustomers = await prisma.user.findMany({
-        where: { agentId: payload!.userId },
-        select: { id: true },
-      });
-      const customerIds = myCustomers.map(c => c.id);
-      tradeFilter.userId = { in: customerIds };
+    // ── Transaction filter for sub-agents ──
+    const txFilter: Record<string, unknown> = {};
+    if (!isSA && customerIds) {
+      txFilter.userId = { in: customerIds };
     }
 
+    // ── Fetch all stats in parallel ──
     const [
       totalUsers,
-      activeTraders,
+      activeUsers,
+      suspendedUsers,
+      newTodayUsers,
       pendingDeposits,
       pendingWithdrawals,
-      totalDepositResult,
-      totalWithdrawalResult,
-      allTrades,
-      wonTrades,
-      lostTrades,
+      totalDepositsResult,
+      totalWithdrawalsResult,
+      totalTrades,
+      openTrades,
+      closedTrades,
+      totalPnlResult,
+      totalWallets,
+      totalEquityResult,
+      agents,
+      recentLogins,
     ] = await Promise.all([
+      // Users
       prisma.user.count({ where: userFilter }),
+      prisma.user.count({ where: { ...userFilter, status: 'ACTIVE' } }),
+      prisma.user.count({ where: { ...userFilter, status: 'SUSPENDED' } }),
       prisma.user.count({
         where: {
           ...userFilter,
-          trades: { some: { status: { in: ['running', 'pending'] } } },
+          createdAt: { gte: new Date(new Date().setHours(0, 0, 0, 0)) },
         },
       }),
-      prisma.deposit.count({
-        where: { ...tradeFilter, status: 'pending' },
-      }),
-      prisma.withdrawal.count({
-        where: { ...tradeFilter, status: 'pending' },
-      }),
-      prisma.deposit.aggregate({
-        where: { ...tradeFilter, status: 'approved' },
+      // Pending deposits/withdrawals (from Transaction model)
+      prisma.transaction.count({ where: { ...txFilter, type: 'DEPOSIT', status: 'PENDING' } }),
+      prisma.transaction.count({ where: { ...txFilter, type: 'WITHDRAW', status: 'PENDING' } }),
+      prisma.transaction.aggregate({
+        where: { ...txFilter, type: 'DEPOSIT', status: 'COMPLETED' },
         _sum: { amount: true },
       }),
-      prisma.withdrawal.aggregate({
-        where: { ...tradeFilter, status: 'approved' },
+      prisma.transaction.aggregate({
+        where: { ...txFilter, type: 'WITHDRAW', status: 'COMPLETED' },
         _sum: { amount: true },
       }),
-      prisma.trade.count({ where: tradeFilter }),
+      // Trades
+      prisma.trade.count({ where: txFilter }),
+      prisma.trade.count({ where: { ...txFilter, status: 'OPEN' } }),
+      prisma.trade.count({ where: { ...txFilter, status: 'CLOSED' } }),
       prisma.trade.aggregate({
-        where: { ...tradeFilter, status: 'won' },
-        _sum: { profit: true },
+        where: { ...txFilter, status: 'CLOSED' },
+        _sum: { pnl: true },
       }),
-      prisma.trade.aggregate({
-        where: { ...tradeFilter, status: 'lost' },
-        _sum: { amount: true },
+      // Wallets
+      prisma.wallet.count(),
+      prisma.wallet.aggregate({ _sum: { totalEquity: true } }),
+      // Agents (SA only)
+      isSA ? prisma.user.count({ where: { role: 'SUB_AGENT', status: 'ACTIVE' } }) : Promise.resolve(0),
+      // Recent login logs
+      prisma.loginLog.findMany({
+        where: isSA ? {} : { userId: { in: customerIds || [] } },
+        orderBy: { createdAt: 'desc' },
+        take: 8,
+        include: { user: { select: { name: true, email: true, role: true } } },
       }),
     ]);
 
-    const totalDepositAmount = totalDepositResult._sum.amount || 0;
-    const totalWithdrawalAmount = totalWithdrawalResult._sum.amount || 0;
-    const platformProfit = (wonTrades._sum.profit || 0) - (lostTrades._sum.amount || 0);
-    const revenue = totalDepositAmount * 0.02;
+    const totalDeposits = totalDepositsResult._sum.amount || 0;
+    const totalWithdrawals = totalWithdrawalsResult._sum.amount || 0;
+    const totalPnl = totalPnlResult._sum.pnl || 0;
+    const platformEquity = totalEquityResult._sum.totalEquity || 0;
+    const revenue = totalDeposits * 0.02; // 2% fee on deposits
 
-    // Daily stats for last 7 days
+    // ── Daily stats for last 7 days ──
     const dailyStats = [];
     const now = new Date();
     for (let i = 6; i >= 0; i--) {
@@ -83,23 +102,26 @@ export async function GET(request: NextRequest) {
       dayStart.setHours(0, 0, 0, 0);
       const dayEnd = new Date(dayStart);
       dayEnd.setDate(dayEnd.getDate() + 1);
-
       const dayName = dayStart.toLocaleDateString('en-US', { weekday: 'short' });
 
-      const [dayDeposits, dayWithdrawals, dayUsers, dayTrades] = await Promise.all([
-        prisma.deposit.aggregate({
-          where: { ...tradeFilter, createdAt: { gte: dayStart, lt: dayEnd }, status: 'approved' },
+      const [dayDeposits, dayWithdrawals, dayUsers, dayTrades, dayPnl] = await Promise.all([
+        prisma.transaction.aggregate({
+          where: { ...txFilter, type: 'DEPOSIT', status: 'COMPLETED', createdAt: { gte: dayStart, lt: dayEnd } },
           _sum: { amount: true },
         }),
-        prisma.withdrawal.aggregate({
-          where: { ...tradeFilter, createdAt: { gte: dayStart, lt: dayEnd }, status: 'approved' },
+        prisma.transaction.aggregate({
+          where: { ...txFilter, type: 'WITHDRAW', status: 'COMPLETED', createdAt: { gte: dayStart, lt: dayEnd } },
           _sum: { amount: true },
         }),
         prisma.user.count({
           where: { ...userFilter, createdAt: { gte: dayStart, lt: dayEnd } },
         }),
         prisma.trade.count({
-          where: { ...tradeFilter, createdAt: { gte: dayStart, lt: dayEnd } },
+          where: { ...txFilter, createdAt: { gte: dayStart, lt: dayEnd } },
+        }),
+        prisma.trade.aggregate({
+          where: { ...txFilter, status: 'CLOSED', closedAt: { gte: dayStart, lt: dayEnd } },
+          _sum: { pnl: true },
         }),
       ]);
 
@@ -109,28 +131,32 @@ export async function GET(request: NextRequest) {
         withdrawals: dayWithdrawals._sum.amount || 0,
         users: dayUsers,
         trades: dayTrades,
+        pnl: dayPnl._sum.pnl || 0,
         revenue: (dayDeposits._sum.amount || 0) * 0.02,
       });
     }
 
-    // Monthly stats
+    // ── Monthly stats for last 6 months ──
     const monthlyStats = [];
     for (let i = 5; i >= 0; i--) {
       const monthStart = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const monthEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
       const monthName = monthStart.toLocaleDateString('en-US', { month: 'short' });
 
-      const [mDeposits, mWithdrawals, mUsers] = await Promise.all([
-        prisma.deposit.aggregate({
-          where: { ...tradeFilter, createdAt: { gte: monthStart, lt: monthEnd }, status: 'approved' },
+      const [mDeposits, mWithdrawals, mUsers, mTrades] = await Promise.all([
+        prisma.transaction.aggregate({
+          where: { ...txFilter, type: 'DEPOSIT', status: 'COMPLETED', createdAt: { gte: monthStart, lt: monthEnd } },
           _sum: { amount: true },
         }),
-        prisma.withdrawal.aggregate({
-          where: { ...tradeFilter, createdAt: { gte: monthStart, lt: monthEnd }, status: 'approved' },
+        prisma.transaction.aggregate({
+          where: { ...txFilter, type: 'WITHDRAW', status: 'COMPLETED', createdAt: { gte: monthStart, lt: monthEnd } },
           _sum: { amount: true },
         }),
         prisma.user.count({
           where: { ...userFilter, createdAt: { gte: monthStart, lt: monthEnd } },
+        }),
+        prisma.trade.count({
+          where: { ...txFilter, createdAt: { gte: monthStart, lt: monthEnd } },
         }),
       ]);
 
@@ -139,25 +165,76 @@ export async function GET(request: NextRequest) {
         deposits: mDeposits._sum.amount || 0,
         withdrawals: mWithdrawals._sum.amount || 0,
         users: mUsers,
+        trades: mTrades,
         revenue: (mDeposits._sum.amount || 0) * 0.02,
       });
     }
+
+    // ── Top pairs (from trades) ──
+    const topPairs = await prisma.trade.groupBy({
+      by: ['symbol'],
+      where: txFilter,
+      _count: { id: true },
+      _sum: { margin: true, pnl: true },
+      orderBy: { _count: { id: 'desc' } },
+      take: 6,
+    });
+
+    // ── Recent pending transactions (for action items) ──
+    const pendingTx = await prisma.transaction.findMany({
+      where: { ...txFilter, status: 'PENDING', type: { in: ['DEPOSIT', 'WITHDRAW'] } },
+      orderBy: { createdAt: 'desc' },
+      take: 5,
+      include: {
+        user: { select: { id: true, name: true, email: true } },
+      },
+    });
 
     return NextResponse.json({
       success: true,
       stats: {
         totalUsers,
-        onlineUsers: Math.floor(totalUsers * 0.1),
-        activeTraders,
-        todayDeposits: dailyStats[dailyStats.length - 1]?.deposits || 0,
-        todayWithdrawals: dailyStats[dailyStats.length - 1]?.withdrawals || 0,
+        activeUsers,
+        suspendedUsers,
+        newTodayUsers,
         pendingDeposits,
         pendingWithdrawals,
-        totalTradingVolume: 0,
+        totalDeposits,
+        totalWithdrawals,
+        totalTrades,
+        openTrades,
+        closedTrades,
+        totalPnl,
+        totalWallets,
+        platformEquity,
         revenue,
-        platformProfit: Math.max(0, platformProfit),
+        agents,
         dailyStats,
         monthlyStats,
+        topPairs: topPairs.map(p => ({
+          symbol: p.symbol,
+          count: p._count.id,
+          volume: p._sum.margin || 0,
+          pnl: p._sum.pnl || 0,
+        })),
+        recentLogins: recentLogins.map(l => ({
+          id: l.id,
+          email: l.email,
+          success: l.success,
+          ip: l.ip,
+          userAgent: l.userAgent,
+          createdAt: l.createdAt,
+          user: l.user,
+        })),
+        pendingTransactions: pendingTx.map(tx => ({
+          id: tx.id,
+          type: tx.type,
+          amount: tx.amount,
+          currency: tx.currency,
+          status: tx.status,
+          createdAt: tx.createdAt,
+          user: tx.user,
+        })),
       },
     });
   } catch (error: unknown) {

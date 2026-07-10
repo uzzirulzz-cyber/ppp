@@ -88,13 +88,13 @@ export default function WithdrawalManagementPage() {
     totalAmount: withdrawals.reduce((s, w) => s + w.amount, 0),
   };
 
-  async function handleAction(txId: string, status: string) {
+  async function handleAction(txId: string, action: string) {
     setActionLoading(txId);
     try {
       const res = await fetch('/api/admin/withdrawals', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ txId, status }),
+        body: JSON.stringify({ txId, action }),
       });
       if (!res.ok) throw new Error('Action failed');
       fetchWithdrawals();
@@ -220,7 +220,7 @@ export default function WithdrawalManagementPage() {
                     {w.status === 'PENDING' ? (
                       <div className="flex items-center gap-2">
                         <button
-                          onClick={() => handleAction(w._id, 'COMPLETED')}
+                          onClick={() => handleAction(w._id, 'approve')}
                           disabled={actionLoading === w._id}
                           className="px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-all"
                           style={{ background: 'rgba(34,197,94,0.15)', color: '#22c55e', border: '1px solid rgba(34,197,94,0.3)' }}
@@ -228,7 +228,7 @@ export default function WithdrawalManagementPage() {
                           Approve
                         </button>
                         <button
-                          onClick={() => handleAction(w._id, 'CANCELLED')}
+                          onClick={() => handleAction(w._id, 'reject')}
                           disabled={actionLoading === w._id}
                           className="px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-all"
                           style={{ background: 'rgba(255,71,87,0.15)', color: '#FF4757', border: '1px solid rgba(255,71,87,0.3)' }}

@@ -61,15 +61,27 @@ export async function GET(request: NextRequest) {
       user: userMap.get(w.userId) || null,
     }));
 
-    // Only SUPER_ADMIN sees total platform equity
-    let summary: any = { walletCount: total };
-    if (payload!.role === 'SUPER_ADMIN') {
-      const totalEquityResult = await prisma.wallet.aggregate({ _sum: { totalEquity: true } });
-      summary.totalEquity = totalEquityResult._sum.totalEquity || 0;
+    // Stats
+    const statsFilter: any = {};
+    if (payload!.role === 'SUB_AGENT') {
+      const allowedIds = await getAccessibleUserIds(payload!);
+      statsFilter.userId = { in: allowedIds };
     }
+    const [totalWalletCount, activeWalletCount, equityAgg, frozenAgg] = await Promise.all([
+      prisma.wallet.count({ where: statsFilter }),
+      prisma.wallet.count({ where: { ...statsFilter, status: 'ACTIVE' } }),
+      prisma.wallet.aggregate({ _sum: { totalEquity: true } }),
+      prisma.walletBalance.aggregate({ _sum: { frozen: true } }),
+    ]);
 
     return NextResponse.json({
       wallets: enriched,
+      stats: {
+        totalWallets: totalWalletCount,
+        totalEquity: equityAgg._sum.totalEquity || 0,
+        frozenAssets: frozenAgg._sum.frozen || 0,
+        activeWallets: activeWalletCount,
+      },
       summary,
       pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
     });
@@ -79,7 +91,70 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST /api/admin/wallets — adjust balance (SUPER_ADMIN only)
+// PUT /api/admin/wallets — adjust balance via walletId (SUPER_ADMIN only)
+export async function PUT(request: NextRequest) {
+  try {
+    const { payload, response } = authenticate(request, ['SUPER_ADMIN']);
+    if (response) return response;
+
+    const body = await request.json();
+    const { walletId, amount, currency: currencyParam } = body;
+
+    if (!walletId || amount === undefined) {
+      return NextResponse.json({ error: 'walletId and amount are required' }, { status: 400 });
+    }
+
+    const currency = (currencyParam || 'USDT').toUpperCase();
+    const wallet = await prisma.wallet.findFirst({ where: { id: walletId }, include: { balances: true } });
+
+    if (!wallet) {
+      return NextResponse.json({ error: 'Wallet not found' }, { status: 404 });
+    }
+    if (wallet.status === 'FROZEN') {
+      return NextResponse.json({ error: 'Wallet is frozen' }, { status: 400 });
+    }
+
+    let balance = wallet.balances.find(b => b.currency === currency);
+    if (!balance) {
+      balance = await prisma.walletBalance.create({
+        data: { walletId: wallet.id, currency, amount: 0, frozen: 0 },
+      });
+    }
+
+    const previousAmount = balance.amount;
+    const newAmount = balance.amount + amount;
+
+    if (newAmount < 0) {
+      return NextResponse.json({ error: 'Insufficient balance' }, { status: 400 });
+    }
+
+    await prisma.walletBalance.update({ where: { id: balance.id }, data: { amount: newAmount } });
+
+    const allBalances = await prisma.walletBalance.findMany({ where: { walletId: wallet.id } });
+    const totalEquity = allBalances.reduce((s, b) => s + b.amount + b.frozen, 0);
+    await prisma.wallet.update({ where: { id: wallet.id }, data: { totalEquity } });
+
+    await prisma.transaction.create({
+      data: {
+        userId: wallet.userId,
+        type: amount > 0 ? 'DEPOSIT' : 'WITHDRAW',
+        status: 'COMPLETED',
+        currency,
+        amount: Math.abs(amount),
+        fee: 0,
+        description: `Admin balance adjustment: ${amount > 0 ? '+' : ''}${amount} ${currency}`,
+        metadata: { adminAction: true, adminId: payload!.userId, walletId: wallet.id, previousAmount, newAmount },
+      },
+    });
+
+    return NextResponse.json({ success: true, message: 'Balance adjusted successfully' });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Internal server error';
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+// POST /api/admin/wallets — adjust balance via userId (SUPER_ADMIN only)
 export async function POST(request: NextRequest) {
   try {
     const { payload, response } = authenticate(request, ['SUPER_ADMIN']);

@@ -66,8 +66,25 @@ export async function GET(request: NextRequest) {
       walletSummary: walletMap.get(u.id) || { totalEquity: 0, walletCount: 0 },
     }));
 
+    // Stats for the stat cards
+    const statsWhere = customerWhereFilter(payload!);
+    const [activeCount, suspendedCount, newTodayCount] = await Promise.all([
+      prisma.user.count({ where: { ...statsWhere, status: 'ACTIVE' } }),
+      prisma.user.count({ where: { ...statsWhere, status: 'SUSPENDED' } }),
+      prisma.user.count({
+        where: { ...statsWhere, createdAt: { gte: new Date(new Date().setHours(0, 0, 0, 0)) } },
+      }),
+    ]);
+
     return NextResponse.json({
       users: enriched,
+      total,
+      stats: {
+        total,
+        active: activeCount,
+        suspended: suspendedCount,
+        newToday: newTodayCount,
+      },
       pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
     });
   } catch (error: unknown) {

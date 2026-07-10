@@ -1,69 +1,78 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
-import { authenticate } from '@/lib/rbac';
+import { authenticate, getAccessibleUserIds } from '@/lib/rbac';
 
-// GET /api/admin/finance — Financial ledger with RBAC
+// GET /api/admin/finance — Financial ledger using Transaction model (RBAC)
 export async function GET(request: NextRequest) {
   try {
     const { payload, response } = authenticate(request, ['SUPER_ADMIN', 'SUB_AGENT']);
     if (response) return response;
     const { searchParams } = new URL(request.url);
     const type = searchParams.get('type') || '';
-    const page = parseInt(searchParams.get('page') || '1');
-    const limit = parseInt(searchParams.get('limit') || '50');
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1'));
+    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '50')));
 
-    const where: Record<string, unknown> = {};
-    if (type) where.type = type;
+    const where: any = {};
+    if (type) where.type = type.toUpperCase();
+
     if (payload!.role === 'SUB_AGENT') {
-      const myCustomers = await prisma.user.findMany({
-        where: { agentId: payload!.userId },
-        select: { id: true },
-      });
-      where.userId = { in: myCustomers.map(c => c.id) };
+      const allowedIds = await getAccessibleUserIds(payload!);
+      where.userId = { in: allowedIds };
     }
 
-    const [ledger, total] = await Promise.all([
-      prisma.financialLedger.findMany({
+    const [transactions, total] = await Promise.all([
+      prisma.transaction.findMany({
         where,
-        include: {
-          user: {
-            select: { id: true, uid: true, username: true, email: true },
-          },
-        },
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * limit,
         take: limit,
       }),
-      prisma.financialLedger.count({ where }),
+      prisma.transaction.count({ where }),
     ]);
 
-    // Summary stats
-    const summary = await prisma.user.aggregate({
-      where: payload!.role === 'SUB_AGENT' ? { id: payload!.userId } : {},
-      _sum: { balance: true, frozenBalance: true, bonusBalance: true, totalProfit: true },
+    // Batch fetch user info
+    const userIds = [...new Set(transactions.map(t => t.userId))];
+    const users = userIds.length > 0
+      ? await prisma.user.findMany({
+          where: { id: { in: userIds } },
+          select: { id: true, name: true, email: true },
+        })
+      : [];
+    const userMap = new Map(users.map(u => [u.id, u]));
+
+    // Wallet equity summary
+    const walletFilter: any = {};
+    if (payload!.role === 'SUB_AGENT') {
+      walletFilter.userId = { in: userIds.length > 0 ? userIds : ['__none__'] };
+    }
+    const equityAgg = await prisma.wallet.aggregate({
+      _sum: { totalEquity: true },
+      _count: { id: true },
     });
 
     return NextResponse.json({
       success: true,
-      ledger: ledger.map(l => ({
-        id: l.id,
-        userId: l.user.uid,
-        username: l.user.username,
-        type: l.type,
-        amount: l.amount,
-        balance: l.balance,
-        description: l.description,
-        referenceId: l.referenceId,
-        createdBy: l.createdBy,
-        createdAt: l.createdAt,
+      ledger: transactions.map(tx => ({
+        id: tx.id,
+        userId: tx.userId,
+        userName: userMap.get(tx.userId)?.name || 'Unknown',
+        userEmail: userMap.get(tx.userId)?.email || '',
+        type: tx.type,
+        amount: tx.amount,
+        fee: tx.fee,
+        currency: tx.currency,
+        status: tx.status,
+        description: tx.description,
+        tradeId: tx.tradeId,
+        metadata: tx.metadata,
+        createdAt: tx.createdAt,
       })),
       summary: {
-        totalBalance: summary._sum.balance || 0,
-        totalFrozen: summary._sum.frozenBalance || 0,
-        totalBonus: summary._sum.bonusBalance || 0,
-        totalProfit: summary._sum.totalProfit || 0,
+        totalEquity: equityAgg._sum.totalEquity || 0,
+        totalWallets: equityAgg._count.id || 0,
       },
-      pagination: { page, limit, total },
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
     });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to fetch finance data';
@@ -72,64 +81,75 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST /api/admin/finance — Manual balance adjustment
+// POST /api/admin/finance — Manual balance adjustment (delegates to wallets endpoint)
 export async function POST(request: NextRequest) {
   try {
-    const { payload, response } = authenticate(request, ['SUPER_ADMIN', 'SUB_AGENT']);
+    const { payload, response } = authenticate(request, ['SUPER_ADMIN']);
     if (response) return response;
     const body = await request.json();
-    const { targetUserId, type, amount, description } = body;
+    const { userId, currency, amount, reason, walletType } = body;
 
-    if (!targetUserId || !type || !amount || amount <= 0) {
-      return NextResponse.json({ success: false, message: 'Missing or invalid fields' }, { status: 400 });
+    if (!userId || !currency || amount === undefined) {
+      return NextResponse.json({ success: false, message: 'userId, currency, and amount are required' }, { status: 400 });
+    }
+    if (typeof amount !== 'number') {
+      return NextResponse.json({ success: false, message: 'amount must be a number' }, { status: 400 });
     }
 
-    const user = await prisma.user.findUnique({ where: { id: targetUserId } });
-    if (!user) {
-      return NextResponse.json({ success: false, message: 'User not found' }, { status: 404 });
+    const upperCurrency = currency.toUpperCase();
+    const wFilter: any = { userId };
+    if (walletType) wFilter.type = walletType;
+
+    let wallet = await prisma.wallet.findFirst({ where: wFilter, include: { balances: true } });
+    if (!wallet) {
+      wallet = await prisma.wallet.create({
+        data: { userId, type: walletType || 'SPOT', status: 'ACTIVE', totalEquity: 0 },
+        include: { balances: true },
+      });
     }
 
-    // Sub-agents can only adjust their own customers
-    if (payload!.role === 'SUB_AGENT' && user.subAgentId !== payload!.userId) {
-      return NextResponse.json({ success: false, message: 'Not authorized to adjust this user' }, { status: 403 });
+    if (wallet.status === 'FROZEN') {
+      return NextResponse.json({ success: false, message: 'Wallet is frozen' }, { status: 400 });
     }
 
-    let updateData: Record<string, unknown> = {};
-    if (type === 'credit') {
-      updateData = { balance: { increment: amount } };
-    } else if (type === 'debit') {
-      if (user.balance < amount) {
-        return NextResponse.json({ success: false, message: 'Insufficient balance' }, { status: 400 });
-      }
-      updateData = { balance: { decrement: amount } };
-    } else if (type === 'freeze') {
-      if (user.balance < amount) {
-        return NextResponse.json({ success: false, message: 'Insufficient balance' }, { status: 400 });
-      }
-      updateData = { balance: { decrement: amount }, frozenBalance: { increment: amount } };
-    } else if (type === 'unfreeze') {
-      if (user.frozenBalance < amount) {
-        return NextResponse.json({ success: false, message: 'Insufficient frozen balance' }, { status: 400 });
-      }
-      updateData = { balance: { increment: amount }, frozenBalance: { decrement: amount } };
-    } else {
-      return NextResponse.json({ success: false, message: 'Invalid adjustment type' }, { status: 400 });
+    let balance = wallet.balances.find(b => b.currency === upperCurrency);
+    if (!balance) {
+      balance = await prisma.walletBalance.create({
+        data: { walletId: wallet.id, currency: upperCurrency, amount: 0, frozen: 0 },
+      });
     }
 
-    await prisma.user.update({ where: { id: targetUserId }, data: updateData });
+    const previousAmount = balance.amount;
+    const newAmount = balance.amount + amount;
 
-    await prisma.financialLedger.create({
+    if (newAmount < 0) {
+      return NextResponse.json({ success: false, message: 'Insufficient balance' }, { status: 400 });
+    }
+
+    await prisma.walletBalance.update({ where: { id: balance.id }, data: { amount: newAmount } });
+
+    const allBalances = await prisma.walletBalance.findMany({ where: { walletId: wallet.id } });
+    const totalEquity = allBalances.reduce((s, b) => s + b.amount + b.frozen, 0);
+    await prisma.wallet.update({ where: { id: wallet.id }, data: { totalEquity } });
+
+    const tx = await prisma.transaction.create({
       data: {
-        userId: targetUserId,
-        type: `manual_${type}`,
-        amount,
-        balance: user.balance,
-        description: description || `Manual ${type} by admin`,
-        createdBy: payload!.userId,
+        userId,
+        type: amount > 0 ? 'DEPOSIT' : 'WITHDRAW',
+        status: 'COMPLETED',
+        currency: upperCurrency,
+        amount: Math.abs(amount),
+        fee: 0,
+        description: reason || `Admin balance adjustment: ${amount > 0 ? '+' : ''}${amount} ${upperCurrency}`,
+        metadata: { adminAction: true, adminId: payload!.userId, walletId: wallet.id, previousAmount, newAmount },
       },
     });
 
-    return NextResponse.json({ success: true, message: `${type} adjustment completed` });
+    return NextResponse.json({
+      success: true,
+      message: `${amount > 0 ? 'Credit' : 'Debit'} of ${Math.abs(amount)} ${upperCurrency} applied`,
+      transaction: tx,
+    });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to adjust balance';
     console.error('Finance adjustment error:', error);

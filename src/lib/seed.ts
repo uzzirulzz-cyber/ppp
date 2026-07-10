@@ -3,10 +3,10 @@ import { hashPassword } from './auth';
 
 const SUB_AGENTS = [
   { name: 'SubAgent 1', email: 'subagent1@trade.com', code: 'PB-AG001' },
-  { name: 'SubAgent 2', email: 'subagent2@trade2.com', code: 'PB-AG002' },
-  { name: 'SubAgent 3', email: 'subagent3@trade3.com', code: 'PB-AG003' },
-  { name: 'SubAgent 4', email: 'subagent4@trade4.com', code: 'PB-AG004' },
-  { name: 'SubAgent 5', email: 'subagent5@trade5.com', code: 'PB-AG005' },
+  { name: 'SubAgent 2', email: 'subagent2@trade.com', code: 'PB-AG002' },
+  { name: 'SubAgent 3', email: 'subagent3@trade.com', code: 'PB-AG003' },
+  { name: 'SubAgent 4', email: 'subagent4@trade.com', code: 'PB-AG004' },
+  { name: 'SubAgent 5', email: 'subagent5@trade.com', code: 'PB-AG005' },
 ];
 
 export async function seedDatabase() {
@@ -64,7 +64,7 @@ export async function seedDatabase() {
         role: 'SUB_AGENT',
         status: 'ACTIVE',
         agentId: admin!.id,
-        mustChangePassword: true, // Force password change on first login
+        mustChangePassword: true,
       },
     });
 
@@ -121,7 +121,6 @@ export async function seedDatabase() {
       const code = `${agentDef.code}-U${String(i).padStart(3, '0')}`;
       const exists = await prisma.invitationCode.findUnique({ where: { code } });
       if (!exists) {
-        // Find the agent to use as createdBy
         const agent = await prisma.user.findUnique({ where: { email: agentDef.email } });
         await prisma.invitationCode.create({
           data: {

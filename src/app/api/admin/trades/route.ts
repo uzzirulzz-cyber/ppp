@@ -124,10 +124,26 @@ export async function GET(request: NextRequest) {
       : [];
     const userMap = new Map(users.map(u => [u.id, u]));
 
-    const enriched = trades.map(t => ({ ...t, _id: t.id, user: userMap.get(t.userId) || null }));
+    const enriched = trades.map(t => ({ ...t, _id: t.id, user: userMap.get(t.userId) || null, userName: userMap.get(t.userId)?.name || 'Unknown' }));
+
+    // Stats
+    const allTradeFilter = payload!.role === 'SUB_AGENT' ? { userId: { in: await getAccessibleUserIds(payload!) } } : {};
+    const [totalTradeCount, openCount, todayVolumeResult, totalPnlResult] = await Promise.all([
+      prisma.trade.count({ where: allTradeFilter }),
+      prisma.trade.count({ where: { ...allTradeFilter, status: 'OPEN' } }),
+      prisma.trade.aggregate({ where: { ...allTradeFilter, createdAt: { gte: new Date(new Date().setHours(0, 0, 0, 0)) } }, _sum: { margin: true } }),
+      prisma.trade.aggregate({ where: { ...allTradeFilter, status: 'CLOSED' }, _sum: { pnl: true } }),
+    ]);
 
     return NextResponse.json({
       trades: enriched,
+      total,
+      stats: {
+        totalTrades: totalTradeCount,
+        openPositions: openCount,
+        todayVolume: todayVolumeResult._sum.margin || 0,
+        totalPnl: totalPnlResult._sum.pnl || 0,
+      },
       pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
     });
   } catch (error: unknown) {
