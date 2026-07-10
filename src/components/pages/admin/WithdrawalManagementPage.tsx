@@ -22,6 +22,7 @@ interface WithdrawalUser {
 
 interface Withdrawal {
   _id: string;
+  id: string;
   userId: string;
   currency: string;
   amount: number;
@@ -157,12 +158,12 @@ export default function WithdrawalManagementPage() {
     setActionLoading(true);
     try {
       const res = await fetch(`/api/admin/withdrawals`, {
-        method: 'POST',
+        method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ action: 'approve', withdrawalId }),
+        body: JSON.stringify({ action: 'approve', txId: withdrawalId }),
       });
       if (!res.ok) throw new Error('Failed to approve withdrawal');
       fetchWithdrawals();
@@ -182,12 +183,12 @@ export default function WithdrawalManagementPage() {
     setActionLoading(true);
     try {
       const res = await fetch(`/api/admin/withdrawals`, {
-        method: 'POST',
+        method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ action: 'reject', withdrawalId, reason: rejectReason.trim() }),
+        body: JSON.stringify({ action: 'reject', txId: withdrawalId, note: rejectReason.trim() }),
       });
       if (!res.ok) throw new Error('Failed to reject withdrawal');
       setRejectingId(null);
@@ -388,7 +389,7 @@ export default function WithdrawalManagementPage() {
                 </tr>
               ) : (
                 withdrawals.map((w) => (
-                  <React.Fragment key={w._id}>
+                  <React.Fragment key={w.id}>
                     <tr>
                       {/* User */}
                       <td>
@@ -465,12 +466,12 @@ export default function WithdrawalManagementPage() {
                               className="btn-primary py-1.5 px-3 text-xs"
                               style={{ padding: '6px 14px', fontSize: 12 }}
                               disabled={actionLoading}
-                              onClick={() => handleApprove(w._id)}
+                              onClick={() => handleApprove(w.id)}
                             >
                               <CheckCircle size={14} className="inline -mt-0.5 mr-1" />
                               Approve
                             </button>
-                            {rejectingId === w._id ? null : (
+                            {rejectingId === w.id ? null : (
                               <button
                                 disabled={actionLoading}
                                 style={{
@@ -485,7 +486,7 @@ export default function WithdrawalManagementPage() {
                                   borderRadius: 'var(--radius-md)',
                                   transition: 'all 0.15s',
                                 }}
-                                onClick={() => setRejectingId(w._id)}
+                                onClick={() => setRejectingId(w.id)}
                               >
                                 <XCircle size={14} className="inline -mt-0.5 mr-1" />
                                 Reject
@@ -510,7 +511,7 @@ export default function WithdrawalManagementPage() {
                     </tr>
 
                     {/* Inline reject row */}
-                    {rejectingId === w._id && (
+                    {rejectingId === w.id && (
                       <tr>
                         <td colSpan={7} style={{ padding: '8px 14px' }}>
                           <div
@@ -537,7 +538,7 @@ export default function WithdrawalManagementPage() {
                                 style={{ fontSize: 13, padding: '8px 12px' }}
                                 autoFocus
                                 onKeyDown={(e) => {
-                                  if (e.key === 'Enter') handleRejectConfirm(w._id);
+                                  if (e.key === 'Enter') handleRejectConfirm(w.id);
                                   if (e.key === 'Escape') {
                                     setRejectingId(null);
                                     setRejectReason('');
@@ -554,7 +555,7 @@ export default function WithdrawalManagementPage() {
                                   background: 'rgba(239, 68, 68, 0.8)',
                                 }}
                                 disabled={actionLoading || !rejectReason.trim()}
-                                onClick={() => handleRejectConfirm(w._id)}
+                                onClick={() => handleRejectConfirm(w.id)}
                               >
                                 <XCircle size={13} className="inline -mt-0.5 mr-1" />
                                 Confirm Reject

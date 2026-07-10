@@ -25,6 +25,7 @@ import UserManagementPage from '@/components/pages/admin/UserManagementPage';
 import AgentManagementPage from '@/components/pages/admin/AgentManagementPage';
 import TradeMonitoringPage from '@/components/pages/admin/TradeMonitoringPage';
 import WalletManagementPage from '@/components/pages/admin/WalletManagementPage';
+import DepositManagementPage from '@/components/pages/admin/DepositManagementPage';
 import WithdrawalManagementPage from '@/components/pages/admin/WithdrawalManagementPage';
 import RevenueAnalyticsPage from '@/components/pages/admin/RevenueAnalyticsPage';
 import CommissionSettingsPage from '@/components/pages/admin/CommissionSettingsPage';
@@ -69,6 +70,7 @@ function PageRouter() {
     case Pages.ADMIN_AGENTS: return <AgentManagementPage />;
     case Pages.ADMIN_TRADES: return <TradeMonitoringPage />;
     case Pages.ADMIN_WALLETS: return <WalletManagementPage />;
+    case Pages.ADMIN_DEPOSITS: return <DepositManagementPage />;
     case Pages.ADMIN_WITHDRAWALS: return <WithdrawalManagementPage />;
     case Pages.ADMIN_ANALYTICS: return <RevenueAnalyticsPage />;
     case Pages.ADMIN_COMMISSIONS: return <CommissionSettingsPage />;

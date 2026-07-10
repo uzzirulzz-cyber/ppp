@@ -45,6 +45,7 @@ const pageTitles: Record<string, string> = {
   [Pages.ADMIN_AGENTS]: 'Agent Management',
   [Pages.ADMIN_TRADES]: 'Trade Management',
   [Pages.ADMIN_WALLETS]: 'Wallet Management',
+  [Pages.ADMIN_DEPOSITS]: 'Deposits',
   [Pages.ADMIN_WITHDRAWALS]: 'Withdrawals',
   [Pages.ADMIN_ANALYTICS]: 'Analytics',
   [Pages.ADMIN_COMMISSIONS]: 'Commissions',

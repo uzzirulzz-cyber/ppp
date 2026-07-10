@@ -69,6 +69,7 @@ const adminItems: NavItem[] = [
   { icon: <UserCog size={20} />, label: 'Agents', page: Pages.ADMIN_AGENTS },
   { icon: <ArrowLeftRight size={20} />, label: 'Trades', page: Pages.ADMIN_TRADES },
   { icon: <WalletCards size={20} />, label: 'Wallets', page: Pages.ADMIN_WALLETS },
+  { icon: <Coins size={20} />, label: 'Deposits', page: Pages.ADMIN_DEPOSITS },
   { icon: <DollarSign size={20} />, label: 'Withdrawals', page: Pages.ADMIN_WITHDRAWALS },
   { icon: <BarChart3 size={20} />, label: 'Analytics', page: Pages.ADMIN_ANALYTICS },
   { icon: <DollarSign size={20} />, label: 'Commissions', page: Pages.ADMIN_COMMISSIONS },

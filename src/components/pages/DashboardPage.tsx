@@ -215,8 +215,8 @@ export default function DashboardPage() {
       const [meRes, walletRes, tradesRes, txRes] = await Promise.all([
         fetch('/api/auth/me', { headers }).then((r) => r.json()),
         fetch('/api/wallet', { headers }).then((r) => r.json()),
-        fetch('/api/trades?limit=5', { headers }).then((r) => r.json()),
-        fetch('/api/wallet/transactions?limit=5', { headers }).then((r) => r.json()),
+        fetch('/api/trades?limit=10', { headers }).then((r) => r.json()),
+        fetch('/api/wallet/transactions?limit=10', { headers }).then((r) => r.json()),
       ]);
 
       // Build new state
@@ -236,10 +236,8 @@ export default function DashboardPage() {
         let frozen = 0;
         for (const w of walletRes.wallets as WalletData[]) {
           for (const b of w.balances) {
-            if (b.currency === 'USDT') {
-              avail += b.amount - b.frozen;
-              frozen += b.frozen;
-            }
+            avail += b.amount;
+            frozen += b.frozen;
           }
         }
         next.availableUSDT = avail;

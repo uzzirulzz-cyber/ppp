@@ -283,7 +283,7 @@ export default function TradingPage() {
           });
           if (res.ok && !cancelled) {
             const data = await res.json();
-            const usdt = data.balances?.find(
+            const usdt = data.wallets?.[0]?.balances?.find(
               (b: { currency: string; amount: number }) => b.currency === 'USDT'
             );
             setWalletBalance(usdt?.amount || 0);
@@ -310,7 +310,7 @@ export default function TradingPage() {
       });
       if (res.ok) {
         const data = await res.json();
-        const usdt = data.balances?.find(
+        const usdt = data.wallets?.[0]?.balances?.find(
           (b: { currency: string; amount: number }) => b.currency === 'USDT'
         );
         setWalletBalance(usdt?.amount || 0);
@@ -392,6 +392,8 @@ export default function TradingPage() {
         type: orderType === 'Stop' ? 'MARKET' : orderType.toUpperCase(),
         quantity: tradeAmount,
         leverage,
+        stopLoss: null,
+        takeProfit: null,
       };
 
       // For MARKET orders, include the current market price

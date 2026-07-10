@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import {
   Users,
@@ -13,58 +13,100 @@ import {
   Award,
   Link2,
   Gift,
+  RefreshCw,
+  ShieldCheck,
 } from 'lucide-react';
+import { useStore } from '@/store/useStore';
 
-const referralCode = 'NEX-USER-ABC123';
-const referralLink = 'https://nextrade.pro/ref/NEX-USER-ABC123';
+// ── Types ──────────────────────────────────────────────────────────────────
 
-const tiers = [
-  {
-    name: 'Bronze',
-    range: '1–10 referrals',
-    commission: '5%',
-    color: '#cd7f32',
-    bgColor: 'rgba(205, 127, 50, 0.1)',
-    borderColor: 'rgba(205, 127, 50, 0.3)',
-    icon: Medal,
-    min: 1,
-    max: 10,
-  },
-  {
-    name: 'Silver',
-    range: '11–50 referrals',
-    commission: '8%',
-    color: '#c0c0c0',
-    bgColor: 'rgba(192, 192, 192, 0.1)',
-    borderColor: 'rgba(192, 192, 192, 0.3)',
-    icon: Award,
-    min: 11,
-    max: 50,
-    current: true,
-  },
-  {
-    name: 'Gold',
-    range: '50+ referrals',
-    commission: '12%',
-    color: '#ffd700',
-    bgColor: 'rgba(255, 215, 0, 0.1)',
-    borderColor: 'rgba(255, 215, 0, 0.3)',
-    icon: Crown,
-    min: 51,
-    max: Infinity,
-  },
-];
+interface ReferralStats {
+  totalReferrals: number;
+  activeReferrals: number;
+  totalCommissionEarned: number;
+  tier: string;
+  commissionRate: number;
+}
 
-const referralHistory = [
-  { user: 'alex_trader_99', date: '2025-01-15', active: true, commission: '$45.20' },
-  { user: 'sarah_crypto', date: '2025-01-14', active: true, commission: '$32.80' },
-  { user: 'mike_waves', date: '2025-01-12', active: true, commission: '$18.50' },
-  { user: 'emma_defi', date: '2025-01-10', active: false, commission: '$0.00' },
-  { user: 'james_hodl', date: '2025-01-08', active: true, commission: '$67.30' },
-  { user: 'luna_moon', date: '2025-01-06', active: true, commission: '$22.10' },
-  { user: 'chad_trader', date: '2025-01-04', active: false, commission: '$0.00' },
-  { user: 'noah_bits', date: '2025-01-02', active: true, commission: '$48.66' },
-];
+interface ReferralRecord {
+  id: string;
+  referredUser: {
+    id: string;
+    name: string;
+    email: string;
+    status: string;
+    createdAt: string;
+  };
+  referralCode: string;
+  level: number;
+  totalCommission: number;
+  isActive: boolean;
+  createdAt: string;
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+
+const fmt = (n: number) =>
+  n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+const formatDate = (dateStr?: string) => {
+  if (!dateStr) return '—';
+  try {
+    const d = new Date(dateStr);
+    return d.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+  } catch {
+    return dateStr;
+  }
+};
+
+// ── Skeleton ───────────────────────────────────────────────────────────────
+
+function Skeleton({ width = '100%', height = 20, rounded = 6 }: { width?: string | number; height?: number; rounded?: number }) {
+  return (
+    <div
+      style={{
+        width,
+        height,
+        borderRadius: rounded,
+        background: 'linear-gradient(90deg, rgba(42,48,66,0.4) 25%, rgba(42,48,66,0.8) 50%, rgba(42,48,66,0.4) 75%)',
+        backgroundSize: '200% 100%',
+        animation: 'shimmer 1.5s infinite',
+      }}
+    />
+  );
+}
+
+function StatCardSkeleton() {
+  return (
+    <div className="stat-card">
+      <div className="flex items-center justify-between mb-3">
+        <Skeleton width={90} height={14} />
+        <Skeleton width={40} height={40} rounded={10} />
+      </div>
+      <Skeleton width={140} height={28} />
+      <Skeleton width={80} height={12} />
+    </div>
+  );
+}
+
+function TableRowSkeleton() {
+  return (
+    <tr>
+      <td><Skeleton width={120} height={14} /></td>
+      <td><Skeleton width={140} height={14} /></td>
+      <td><Skeleton width={80} height={14} /></td>
+      <td><Skeleton width={60} height={14} /></td>
+      <td><Skeleton width={70} height={20} rounded={10} /></td>
+      <td><Skeleton width={90} height={14} /></td>
+    </tr>
+  );
+}
+
+// ── Variants ───────────────────────────────────────────────────────────────
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -79,9 +121,53 @@ const itemVariants = {
   show: { opacity: 1, y: 0, transition: { duration: 0.4, ease: 'easeOut' as const } },
 };
 
+// ── Component ──────────────────────────────────────────────────────────────
+
 export default function ReferralPage() {
+  const { token, user: storeUser } = useStore();
+
+  const [referralCode, setReferralCode] = useState('');
+  const [referralLink, setReferralLink] = useState('');
+  const [stats, setStats] = useState<ReferralStats | null>(null);
+  const [referrals, setReferrals] = useState<ReferralRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [copiedCode, setCopiedCode] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
+
+  const fetchReferralData = useCallback(async (currentToken: string) => {
+    try {
+      setError(null);
+      setLoading(true);
+
+      const res = await fetch('/api/referral', {
+        headers: { Authorization: `Bearer ${currentToken}` },
+      });
+      if (!res.ok) throw new Error('Failed to fetch referral data');
+
+      const data = await res.json();
+      setReferralCode(data.referralCode || '');
+      setReferralLink(data.referralLink || '');
+      setStats(data.stats || null);
+      setReferrals(data.referralHistory || []);
+    } catch (err) {
+      setError('Failed to load referral data.');
+      console.error('Referral fetch error:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (token) {
+      fetchReferralData(token);
+    }
+  }, [token, fetchReferralData]);
+
+  const totalInvited = stats?.totalReferrals || 0;
+  const activeTraders = stats?.activeReferrals || 0;
+  const totalCommission = stats?.totalCommissionEarned || 0;
+  const currentTier = stats?.tier || 'Bronze';
 
   const handleCopyCode = () => {
     navigator.clipboard.writeText(referralCode).catch(() => {});
@@ -95,7 +181,22 @@ export default function ReferralPage() {
     setTimeout(() => setCopiedLink(false), 2000);
   };
 
-  const currentTierIndex = 1; // Silver
+  // ── Render ──
+
+  if (error && !loading) {
+    return (
+      <div className="flex flex-col items-center justify-center" style={{ minHeight: 400 }}>
+        <p style={{ color: 'var(--accent-red)', fontSize: 16, marginBottom: 16 }}>{error}</p>
+        <button
+          onClick={() => token && fetchReferralData(token)}
+          className="btn-primary flex items-center gap-2"
+        >
+          <RefreshCw size={16} />
+          Retry
+        </button>
+      </div>
+    );
+  }
 
   return (
     <motion.div
@@ -113,99 +214,155 @@ export default function ReferralPage() {
         </p>
       </motion.div>
 
+      {/* Agent Profile Card */}
+      <motion.div className="glass-card p-6" variants={itemVariants}>
+        <div className="flex items-center gap-3 mb-4">
+          <div
+            className="flex items-center justify-center rounded-full"
+            style={{
+              width: 48,
+              height: 48,
+              background: 'rgba(245, 180, 0, 0.15)',
+              fontSize: 20,
+              fontWeight: 700,
+              color: 'var(--accent-gold)',
+            }}
+          >
+            <ShieldCheck size={24} />
+          </div>
+          <div>
+            <h2
+              className="text-lg font-bold"
+              style={{ color: 'var(--text-primary)' }}
+            >
+              {loading ? <Skeleton width={150} height={22} /> : (storeUser?.name || 'User')}
+            </h2>
+            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+              {loading ? <Skeleton width={200} height={14} /> : (storeUser?.email || '')}
+            </p>
+          </div>
+        </div>
+        <div
+          className="flex flex-wrap gap-4 text-xs"
+          style={{ color: 'var(--text-secondary)' }}
+        >
+          <span className="flex items-center gap-1.5">
+            <span style={{ color: 'var(--text-muted)' }}>Role:</span>
+            <span className="badge badge-amber">{storeUser?.role || 'USER'}</span>
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span style={{ color: 'var(--text-muted)' }}>Status:</span>
+            <span className="badge badge-green">{storeUser?.status || 'ACTIVE'}</span>
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span style={{ color: 'var(--text-muted)' }}>Joined:</span>
+            {loading ? <Skeleton width={100} height={14} /> : formatDate(storeUser?.createdAt)}
+          </span>
+        </div>
+      </motion.div>
+
       {/* Stats Row */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <motion.div className="stat-card" variants={itemVariants}>
-          <div className="flex items-center justify-between mb-3">
-            <span
-              className="text-sm font-medium"
-              style={{ color: 'var(--text-secondary)' }}
-            >
-              Total Referrals
-            </span>
-            <div
-              className="flex items-center justify-center rounded-lg"
-              style={{
-                width: 40,
-                height: 40,
-                background: 'rgba(59, 130, 246, 0.15)',
-              }}
-            >
-              <Users size={20} style={{ color: 'var(--accent-blue)' }} />
-            </div>
-          </div>
-          <div
-            className="text-2xl font-bold"
-            style={{ color: 'var(--text-primary)' }}
-          >
-            24
-          </div>
-          <div className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
-            All time
-          </div>
-        </motion.div>
+        {loading ? (
+          <>
+            <StatCardSkeleton />
+            <StatCardSkeleton />
+            <StatCardSkeleton />
+          </>
+        ) : (
+          <>
+            <motion.div className="stat-card" variants={itemVariants}>
+              <div className="flex items-center justify-between mb-3">
+                <span
+                  className="text-sm font-medium"
+                  style={{ color: 'var(--text-secondary)' }}
+                >
+                  Total Invited
+                </span>
+                <div
+                  className="flex items-center justify-center rounded-lg"
+                  style={{
+                    width: 40,
+                    height: 40,
+                    background: 'rgba(59, 130, 246, 0.15)',
+                  }}
+                >
+                  <Users size={20} style={{ color: 'var(--accent-blue)' }} />
+                </div>
+              </div>
+              <div
+                className="text-2xl font-bold"
+                style={{ color: 'var(--text-primary)' }}
+              >
+                {totalInvited}
+              </div>
+              <div className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+                All time
+              </div>
+            </motion.div>
 
-        <motion.div className="stat-card" variants={itemVariants}>
-          <div className="flex items-center justify-between mb-3">
-            <span
-              className="text-sm font-medium"
-              style={{ color: 'var(--text-secondary)' }}
-            >
-              Total Commission Earned
-            </span>
-            <div
-              className="flex items-center justify-center rounded-lg"
-              style={{
-                width: 40,
-                height: 40,
-                background: 'rgba(34, 197, 94, 0.15)',
-              }}
-            >
-              <DollarSign size={20} style={{ color: 'var(--accent-green)' }} />
-            </div>
-          </div>
-          <div className="text-2xl font-bold text-green">$1,234.56</div>
-          <div className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
-            Lifetime earnings
-          </div>
-        </motion.div>
+            <motion.div className="stat-card" variants={itemVariants}>
+              <div className="flex items-center justify-between mb-3">
+                <span
+                  className="text-sm font-medium"
+                  style={{ color: 'var(--text-secondary)' }}
+                >
+                  Active Traders
+                </span>
+                <div
+                  className="flex items-center justify-center rounded-lg"
+                  style={{
+                    width: 40,
+                    height: 40,
+                    background: 'rgba(139, 92, 246, 0.15)',
+                  }}
+                >
+                  <UserCheck size={20} style={{ color: 'var(--accent-purple)' }} />
+                </div>
+              </div>
+              <div
+                className="text-2xl font-bold"
+                style={{ color: 'var(--text-primary)' }}
+              >
+                {activeTraders}
+              </div>
+              <div className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+                Currently trading
+              </div>
+            </motion.div>
 
-        <motion.div className="stat-card" variants={itemVariants}>
-          <div className="flex items-center justify-between mb-3">
-            <span
-              className="text-sm font-medium"
-              style={{ color: 'var(--text-secondary)' }}
-            >
-              Active Referrals
-            </span>
-            <div
-              className="flex items-center justify-center rounded-lg"
-              style={{
-                width: 40,
-                height: 40,
-                background: 'rgba(139, 92, 246, 0.15)',
-              }}
-            >
-              <UserCheck size={20} style={{ color: 'var(--accent-purple)' }} />
-            </div>
-          </div>
-          <div
-            className="text-2xl font-bold"
-            style={{ color: 'var(--text-primary)' }}
-          >
-            18
-          </div>
-          <div className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
-            Currently trading
-          </div>
-        </motion.div>
+            <motion.div className="stat-card" variants={itemVariants}>
+              <div className="flex items-center justify-between mb-3">
+                <span
+                  className="text-sm font-medium"
+                  style={{ color: 'var(--text-secondary)' }}
+                >
+                  Total Commission
+                </span>
+                <div
+                  className="flex items-center justify-center rounded-lg"
+                  style={{
+                    width: 40,
+                    height: 40,
+                    background: 'rgba(34, 197, 94, 0.15)',
+                  }}
+                >
+                  <DollarSign size={20} style={{ color: 'var(--accent-green)' }} />
+                </div>
+              </div>
+              <div className="text-2xl font-bold text-green">
+                ${fmt(totalCommission)}
+              </div>
+              <div className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+                Lifetime earnings
+              </div>
+            </motion.div>
+          </>
+        )}
       </div>
 
       {/* Referral Code & Link */}
-      <motion.div
-        className="glass-card p-6"
-        variants={itemVariants}
-      >
+      <motion.div className="glass-card p-6" variants={itemVariants}>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Referral Code */}
           <div>
@@ -227,13 +384,14 @@ export default function ReferralPage() {
                 className="text-lg font-bold tracking-wider"
                 style={{ color: 'var(--text-primary)', fontFamily: 'monospace' }}
               >
-                {referralCode}
+                {loading ? <Skeleton width={160} height={22} /> : (referralCode || '—')}
               </span>
               <motion.button
                 className="btn-secondary flex items-center gap-2 shrink-0"
                 whileHover={{ scale: 1.03 }}
                 whileTap={{ scale: 0.97 }}
                 onClick={handleCopyCode}
+                disabled={!referralCode}
               >
                 {copiedCode ? (
                   <>
@@ -270,13 +428,14 @@ export default function ReferralPage() {
                 className="text-sm truncate"
                 style={{ color: 'var(--accent-blue)', fontFamily: 'monospace' }}
               >
-                {referralLink}
+                {loading ? <Skeleton width={300} height={14} /> : (referralLink || 'No referral link available')}
               </span>
               <motion.button
                 className="btn-secondary flex items-center gap-2 shrink-0"
                 whileHover={{ scale: 1.03 }}
                 whileTap={{ scale: 0.97 }}
                 onClick={handleCopyLink}
+                disabled={!referralLink || referralLink.includes('undefined')}
               >
                 {copiedLink ? (
                   <>
@@ -295,89 +454,7 @@ export default function ReferralPage() {
         </div>
       </motion.div>
 
-      {/* Referral Tiers */}
-      <motion.div variants={itemVariants}>
-        <h2
-          className="text-base font-semibold mb-4"
-          style={{ color: 'var(--text-primary)' }}
-        >
-          Referral Tiers
-        </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {tiers.map((tier, i) => {
-            const Icon = tier.icon;
-            const isCurrent = i === currentTierIndex;
-            return (
-              <motion.div
-                key={tier.name}
-                className="stat-card relative overflow-hidden"
-                style={{
-                  borderColor: isCurrent ? tier.color : undefined,
-                  boxShadow: isCurrent
-                    ? `0 0 20px ${tier.color}30, 0 0 40px ${tier.color}15`
-                    : undefined,
-                }}
-                whileHover={{ scale: 1.02 }}
-                transition={{ duration: 0.2 }}
-              >
-                {isCurrent && (
-                  <div
-                    className="absolute top-0 right-0 px-3 py-1 rounded-bl-lg text-xs font-bold"
-                    style={{
-                      background: `${tier.color}25`,
-                      color: tier.color,
-                    }}
-                  >
-                    Current
-                  </div>
-                )}
-                <div className="flex items-center gap-3 mb-3">
-                  <div
-                    className="flex items-center justify-center rounded-full"
-                    style={{
-                      width: 42,
-                      height: 42,
-                      background: tier.bgColor,
-                    }}
-                  >
-                    <Icon size={22} style={{ color: tier.color }} />
-                  </div>
-                  <div>
-                    <p
-                      className="text-base font-bold"
-                      style={{ color: tier.color }}
-                    >
-                      {tier.name}
-                    </p>
-                    <p
-                      className="text-xs"
-                      style={{ color: 'var(--text-muted)' }}
-                    >
-                      {tier.range}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-baseline gap-1">
-                  <span
-                    className="text-3xl font-bold"
-                    style={{ color: 'var(--text-primary)' }}
-                  >
-                    {tier.commission}
-                  </span>
-                  <span
-                    className="text-sm"
-                    style={{ color: 'var(--text-muted)' }}
-                  >
-                    commission
-                  </span>
-                </div>
-              </motion.div>
-            );
-          })}
-        </div>
-      </motion.div>
-
-      {/* Referral History Table */}
+      {/* Invited Users Table */}
       <motion.div className="glass-card" variants={itemVariants}>
         <div className="p-4 pb-0">
           <h2
@@ -391,61 +468,83 @@ export default function ReferralPage() {
           <table className="data-table">
             <thead>
               <tr>
-                <th>Referred User</th>
-                <th>Date</th>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Commission</th>
+                <th>Level</th>
                 <th>Status</th>
-                <th>Commission Earned</th>
+                <th>Join Date</th>
               </tr>
             </thead>
             <tbody>
-              {referralHistory.map((ref, i) => (
-                <tr key={i}>
-                  <td>
-                    <div className="flex items-center gap-2">
-                      <div
-                        className="flex items-center justify-center rounded-full shrink-0"
-                        style={{
-                          width: 28,
-                          height: 28,
-                          background: 'var(--bg-primary)',
-                          fontSize: 11,
-                          fontWeight: 700,
-                          color: 'var(--text-secondary)',
-                        }}
-                      >
-                        {ref.user.charAt(0).toUpperCase()}
-                      </div>
-                      <span
-                        className="text-sm font-medium"
-                        style={{ color: 'var(--text-primary)' }}
-                      >
-                        {ref.user}
-                      </span>
+              {loading ? (
+                <>
+                  <TableRowSkeleton />
+                  <TableRowSkeleton />
+                  <TableRowSkeleton />
+                  <TableRowSkeleton />
+                </>
+              ) : referrals.length === 0 ? (
+                <tr>
+                  <td colSpan={6}>
+                    <div className="flex flex-col items-center justify-center py-12 px-4">
+                      <Users size={32} style={{ color: 'var(--text-muted)', marginBottom: 12 }} />
+                      <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+                        No referrals yet. Share your referral code to get started.
+                      </p>
                     </div>
                   </td>
-                  <td style={{ color: 'var(--text-muted)' }}>{ref.date}</td>
-                  <td>
-                    <span
-                      className={`badge ${ref.active ? 'badge-green' : 'badge-red'}`}
-                    >
-                      {ref.active ? 'Active' : 'Inactive'}
-                    </span>
-                  </td>
-                  <td>
-                    <span
-                      className="text-sm font-semibold"
-                      style={{
-                        color:
-                          ref.commission === '$0.00'
-                            ? 'var(--text-muted)'
-                            : 'var(--accent-green)',
-                      }}
-                    >
-                      {ref.commission}
-                    </span>
-                  </td>
                 </tr>
-              ))}
+              ) : (
+                referrals.map((r) => (
+                  <tr key={r.id}>
+                    <td>
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="flex items-center justify-center rounded-full shrink-0"
+                          style={{
+                            width: 28,
+                            height: 28,
+                            background: 'var(--bg-primary)',
+                            fontSize: 11,
+                            fontWeight: 700,
+                            color: 'var(--text-secondary)',
+                          }}
+                        >
+                          {(r.referredUser?.name || 'U').charAt(0).toUpperCase()}
+                        </div>
+                        <span
+                          className="text-sm font-medium"
+                          style={{ color: 'var(--text-primary)' }}
+                        >
+                          {r.referredUser?.name || '—'}
+                        </span>
+                      </div>
+                    </td>
+                    <td style={{ color: 'var(--text-muted)' }}>
+                      {r.referredUser?.email || '—'}
+                    </td>
+                    <td style={{ color: 'var(--accent-green)', fontWeight: 600 }}>
+                      ${fmt(r.totalCommission)}
+                    </td>
+                    <td style={{ color: 'var(--text-secondary)' }}>
+                      L{r.level}
+                    </td>
+                    <td>
+                      <span
+                        className={`badge ${
+                          r.isActive && r.referredUser?.status === 'ACTIVE' ? 'badge-green' : 'badge-red'
+                        }`}
+                      >
+                        {r.isActive && r.referredUser?.status === 'ACTIVE' ? 'Active' : 'Inactive'}
+                      </span>
+                    </td>
+                    <td style={{ color: 'var(--text-muted)' }}>
+                      {formatDate(r.createdAt)}
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>

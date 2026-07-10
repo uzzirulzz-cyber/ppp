@@ -58,6 +58,8 @@ interface Transaction {
 const CURRENCIES = ['USDT', 'BTC', 'ETH'] as const;
 const NETWORKS = ['TRC20', 'ERC20', 'BEP20'] as const;
 
+const WITHDRAW_METHODS = ['JAZZCASH', 'EASYPAISA', 'BANK_TRANSFER', 'VISA', 'MASTERCARD'] as const;
+
 const DEPOSIT_ADDRESSES: Record<string, string> = {
   'USDT-TRC20': 'TN2Y3R4Xk8jZBbPq7vMwEgHsLdFt5nKcAo',
   'USDT-ERC20': '0x7a3B9c2D8e1F4a6B5d0C3E7f8A9b1D2c4E5F6a7B',
@@ -290,7 +292,7 @@ export default function WalletPage() {
   // withdraw
   const [wdCurrency, setWdCurrency] = useState('USDT');
   const [wdAmount, setWdAmount] = useState('');
-  const [wdMethod, setWdMethod] = useState('TRC20');
+  const [wdMethod, setWdMethod] = useState('BANK_TRANSFER');
   const [wdAccountNumber, setWdAccountNumber] = useState('');
   const [wdAccountName, setWdAccountName] = useState('');
   const [wdSubmitting, setWdSubmitting] = useState(false);
@@ -319,7 +321,7 @@ export default function WalletPage() {
     async (page = 1, filter: TxFilter = 'all') => {
       try {
         setTxLoading(true);
-        const params = new URLSearchParams({ page: String(page), limit: '10' });
+        const params = new URLSearchParams({ page: String(page), limit: '50' });
         if (filter !== 'all') {
           const map: Record<string, string> = {
             deposits: 'DEPOSIT',
@@ -444,13 +446,13 @@ export default function WalletPage() {
     }
     setDepSubmitting(true);
     try {
+      const hash = depTxHash.trim();
       const body: Record<string, unknown> = {
         currency: depCurrency,
         amount: amt,
         method: depNetwork,
+        txHash: hash,
       };
-      const hash = depTxHash.trim();
-      if (hash) body.txHash = hash;
 
       const res = await fetch('/api/wallet/deposit', {
         method: 'POST',
@@ -460,7 +462,7 @@ export default function WalletPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || data.message || 'Deposit request failed');
 
-      setDepSuccess(data.message || 'Deposit submitted successfully');
+      setDepSuccess(data.message || 'Deposit submitted — pending confirmation');
 
       // If the server returns the new transaction, prepend it
       if (data.transaction) {
@@ -530,7 +532,7 @@ export default function WalletPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || data.message || 'Withdrawal request failed');
 
-      setWdSuccess(data.message || 'Withdrawal submitted successfully');
+      setWdSuccess(data.message || 'Withdrawal submitted — Pending approval');
 
       // If the server returns the new transaction, prepend it
       if (data.transaction) {
@@ -783,9 +785,9 @@ export default function WalletPage() {
           </div>
           <div>
             <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>
-              Method / Network
+              Withdrawal Method
             </label>
-            <StyledSelect value={wdMethod} onChange={setWdMethod} options={NETWORKS} disabled={wdSubmitting} />
+            <StyledSelect value={wdMethod} onChange={setWdMethod} options={WITHDRAW_METHODS} disabled={wdSubmitting} />
           </div>
         </div>
 
