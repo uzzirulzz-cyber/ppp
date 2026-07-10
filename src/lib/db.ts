@@ -3,13 +3,14 @@ import { PrismaNeon } from '@prisma/adapter-neon';
 import { neonConfig } from '@neondatabase/serverless';
 import ws from 'ws';
 
-// Required for Neon serverless in Node.js
+// Polyfill WebSocket for Node.js
 if (typeof WebSocket === 'undefined') {
   neonConfig.webSocketConstructor = ws;
 }
 
 function createPrismaClient() {
-  const adapter = new PrismaNeon({ connectionString: process.env.DATABASE_URL! });
+  const connectionString = process.env.DATABASE_URL!;
+  const adapter = new PrismaNeon({ connectionString });
   return new PrismaClient({ adapter } as any);
 }
 
